@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/bonyuta0204/personal-agent/go/internal/domain/port/repository"
-	"github.com/bonyuta0204/personal-agent/go/internal/usecase/store"
+	storeusecase "github.com/bonyuta0204/personal-agent/go/internal/usecase/store"
 	"github.com/spf13/cobra"
 )
 
@@ -26,7 +26,7 @@ var createStoreCmd = &cobra.Command{
 		// Initialize dependencies (in a real app, this would be handled by a dependency injection container)
 		// For now, we'll just show the command structure
 		_ = repository.StoreRepository(nil)
-		_ = store.NewCreateUsecase(nil)
+		_ = storeusecase.NewCreateUsecase(nil)
 
 		// In a real implementation, we would call the use case here:
 		// store, err := createUsecase.Create(repo)
