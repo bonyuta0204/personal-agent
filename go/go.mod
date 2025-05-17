@@ -5,6 +5,7 @@ go 1.24.0
 require (
 	github.com/google/go-github/v58 v58.0.0
 	github.com/jmoiron/sqlx v1.4.0
+	github.com/joho/godotenv v1.5.1
 	github.com/lib/pq v1.10.9
 	github.com/spf13/cobra v1.9.1
 	golang.org/x/oauth2 v0.30.0

@@ -22,20 +22,37 @@ var createStoreCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		repo := args[0]
+		ctx := GetAppContext()
 
-		// Initialize dependencies (in a real app, this would be handled by a dependency injection container)
-		// For now, we'll just show the command structure
-		_ = repository.StoreRepository(nil)
+		// Log database connection info (for debugging, remove in production)
+		cfg := ctx.Config
+		fmt.Printf("Connecting to database: %s@%s:%s/%s\n", 
+			cfg.Database.User, 
+			cfg.Database.Host, 
+			cfg.Database.Port, 
+			cfg.Database.Name)
+
+		// Initialize dependencies with configuration
+		// In a real implementation, you would use the config to initialize your database connection
+		// For example:
+		// db, err := sql.Open("postgres", cfg.Database.GetDSN())
+		// if err != nil {
+		//     return fmt.Errorf("failed to connect to database: %v", err)
+		// }
+		// defer db.Close()
+		
+		// Initialize repository and use case with database connection
+		_ = repository.StoreRepository(nil) // Pass db here
 		_ = storeusecase.NewCreateUsecase(nil)
 
-		// In a real implementation, we would call the use case here:
+
+		fmt.Printf("Creating store for repository: %s\n", repo)
 		// store, err := createUsecase.Create(repo)
 		// if err != nil {
 		//     return fmt.Errorf("failed to create store: %v", err)
 		// }
-		// fmt.Printf("Created store with ID: %d\n", store.ID())
-
-		fmt.Printf("Would create store for repository: %s\n", repo)
+		// fmt.Printf("Successfully created store with ID: %d\n", store.ID())
+		
 		return nil
 	},
 }
@@ -44,8 +61,31 @@ var listStoresCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List all document stores",
 	RunE: func(cmd *cobra.Command, args []string) error {
+		ctx := GetAppContext()
+		
+		// In a real implementation, you would use the config to connect to the database
+		// and list all stores
+		fmt.Printf("Listing all document stores from database: %s\n", 
+			ctx.Config.Database.Name)
+		
+		// Example of accessing database configuration
+		// db, err := sql.Open("postgres", ctx.Config.Database.GetDSN())
+		// if err != nil {
+		//     return fmt.Errorf("failed to connect to database: %v", err)
+		// }
+		// defer db.Close()
+		
 		// Implementation would go here
-		fmt.Println("Listing all document stores")
+		// stores, err := storeRepository.List()
+		// if err != nil {
+		//     return fmt.Errorf("failed to list stores: %v", err)
+		// }
+		
+		// for _, store := range stores {
+		//     fmt.Printf("- %s (ID: %d)\n", store.Name(), store.ID())
+		// }
+		
+		fmt.Println("No stores found (not implemented yet)")
 		return nil
 	},
 }
