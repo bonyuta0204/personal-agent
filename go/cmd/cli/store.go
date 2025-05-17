@@ -1,9 +1,12 @@
 package main
 
 import (
+	"database/sql"
 	"fmt"
 
-	"github.com/bonyuta0204/personal-agent/go/internal/domain/port/repository"
+	"github.com/bonyuta0204/personal-agent/go/internal/domain/model"
+	database "github.com/bonyuta0204/personal-agent/go/internal/infrastructure/database"
+	postgresRepo "github.com/bonyuta0204/personal-agent/go/internal/infrastructure/repository/postgres"
 	storeusecase "github.com/bonyuta0204/personal-agent/go/internal/usecase/store"
 	"github.com/spf13/cobra"
 )
@@ -13,6 +16,10 @@ var storeCmd = &cobra.Command{
 	Use:   "store",
 	Short: "Manage document stores",
 	Long:  `Commands for managing document storage locations.`,
+	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		// This runs before any store subcommand
+		return nil
+	},
 }
 
 var createStoreCmd = &cobra.Command{
@@ -24,37 +31,37 @@ var createStoreCmd = &cobra.Command{
 		repo := args[0]
 		ctx := GetAppContext()
 
-		// Log database connection info (for debugging, remove in production)
-		cfg := ctx.Config
-		fmt.Printf("Connecting to database: %s@%s:%s/%s\n", 
-			cfg.Database.User, 
-			cfg.Database.Host, 
-			cfg.Database.Port, 
-			cfg.Database.Name)
+		// Initialize database connection
+		db, err := database.NewDBConnection(&ctx.Config.Database)
+		if err != nil {
+			return fmt.Errorf("database connection error: %w", err)
+		}
+		defer database.CloseDB(db)
 
-		// Initialize dependencies with configuration
-		// In a real implementation, you would use the config to initialize your database connection
-		// For example:
-		// db, err := sql.Open("postgres", cfg.Database.GetDSN())
-		// if err != nil {
-		//     return fmt.Errorf("failed to connect to database: %v", err)
-		// }
-		// defer db.Close()
-		
-		// Initialize repository and use case with database connection
-		_ = repository.StoreRepository(nil) // Pass db here
-		_ = storeusecase.NewCreateUsecase(nil)
+		// Initialize repository and use case
+		repository := postgresRepo.NewStoreRepository(db)
+		createUsecase := storeusecase.NewCreateUsecase(repository)
 
+		// Create the store
+		store, err := createUsecase.Create(repo)
+		if err != nil {
+			return fmt.Errorf("failed to create store: %w", err)
+		}
 
-		fmt.Printf("Creating store for repository: %s\n", repo)
-		// store, err := createUsecase.Create(repo)
-		// if err != nil {
-		//     return fmt.Errorf("failed to create store: %v", err)
-		// }
-		// fmt.Printf("Successfully created store with ID: %d\n", store.ID())
-		
+		// Print success message
+		fmt.Printf("Successfully created store with ID: %d\n", store.ID())
+		fmt.Printf("Type: %s, Repository: %s\n", store.Type(), store.(*model.GitHubStore).Repo())
+
 		return nil
 	},
+}
+
+// listStoresResponse represents the structure of a store in the list
+// This is a simplified version of the Store model for listing purposes
+type listStoresResponse struct {
+	ID   uint   `db:"id"`
+	Type string `db:"type"`
+	Repo string `db:"repo"`
 }
 
 var listStoresCmd = &cobra.Command{
@@ -62,30 +69,38 @@ var listStoresCmd = &cobra.Command{
 	Short: "List all document stores",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := GetAppContext()
-		
-		// In a real implementation, you would use the config to connect to the database
-		// and list all stores
-		fmt.Printf("Listing all document stores from database: %s\n", 
-			ctx.Config.Database.Name)
-		
-		// Example of accessing database configuration
-		// db, err := sql.Open("postgres", ctx.Config.Database.GetDSN())
-		// if err != nil {
-		//     return fmt.Errorf("failed to connect to database: %v", err)
-		// }
-		// defer db.Close()
-		
-		// Implementation would go here
-		// stores, err := storeRepository.List()
-		// if err != nil {
-		//     return fmt.Errorf("failed to list stores: %v", err)
-		// }
-		
-		// for _, store := range stores {
-		//     fmt.Printf("- %s (ID: %d)\n", store.Name(), store.ID())
-		// }
-		
-		fmt.Println("No stores found (not implemented yet)")
+
+		// Initialize database connection
+		db, err := database.NewDBConnection(&ctx.Config.Database)
+		if err != nil {
+			return fmt.Errorf("database connection error: %w", err)
+		}
+		defer database.CloseDB(db)
+
+		// Query to list all stores
+		query := `SELECT id, type, repo FROM stores ORDER BY id`
+
+		var stores []listStoresResponse
+		if err := db.Select(&stores, query); err != nil {
+			if err == sql.ErrNoRows {
+				fmt.Println("No document stores found")
+				return nil
+			}
+			return fmt.Errorf("failed to list stores: %w", err)
+		}
+
+		if len(stores) == 0 {
+			fmt.Println("No document stores found")
+			return nil
+		}
+
+		// Print stores in a table format
+		fmt.Println("ID  | Type    | Repository")
+		fmt.Println("----|---------|-----------")
+		for _, store := range stores {
+			fmt.Printf("%-3d | %-7s | %s\n", store.ID, store.Type, store.Repo)
+		}
+
 		return nil
 	},
 }
@@ -96,4 +111,6 @@ func init() {
 	storeCmd.AddCommand(listStoresCmd)
 
 	// Add flags for store commands here if needed
+	// Example:
+	// createStoreCmd.Flags().StringP("type", "t", "github", "Type of the store (e.g., github)")
 }
