@@ -2,7 +2,7 @@ package storage
 
 import (
 	"github.com/bonyuta0204/personal-agent/go/internal/domain/model"
-	"github.com/bonyuta0204/personal-agent/go/internal/usecase/document"
+	port "github.com/bonyuta0204/personal-agent/go/internal/domain/port/storage"
 )
 
 // StorageFactoryProvider provides the appropriate storage factory based on store type
@@ -18,7 +18,7 @@ func NewStorageFactoryProvider() *StorageFactoryProvider {
 }
 
 // GetFactory returns the appropriate storage factory for the given store type
-func (p *StorageFactoryProvider) GetFactory(storeType string) (document.StorageFactory, error) {
+func (p *StorageFactoryProvider) GetFactory(storeType string) (port.StorageFactory, error) {
 	switch storeType {
 	case model.StoreTypeGitHub:
 		return p.githubFactory, nil

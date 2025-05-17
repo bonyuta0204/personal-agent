@@ -2,7 +2,7 @@ package model
 
 import "errors"
 
-type StoreId string
+type StoreId uint
 
 const (
 	StoreTypeGitHub = "github"

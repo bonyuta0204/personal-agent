@@ -3,6 +3,7 @@ package document
 import (
 	"fmt"
 
+	"github.com/bonyuta0204/personal-agent/go/internal/domain/model"
 	"github.com/bonyuta0204/personal-agent/go/internal/domain/port/repository"
 	"github.com/bonyuta0204/personal-agent/go/internal/domain/port/storage"
 )
@@ -23,7 +24,14 @@ func NewSyncUsecase(storeRepo repository.StoreRepository, documentRepo repositor
 }
 
 func (u *SyncUsecase) Sync(storeId string) error {
-	store, err := u.storeRepo.GetStore(storeId)
+	// Convert string storeId to model.StoreId (uint)
+	var id model.StoreId
+	_, err := fmt.Sscanf(storeId, "%d", &id)
+	if err != nil {
+		return fmt.Errorf("invalid store ID format: %v", err)
+	}
+	
+	store, err := u.storeRepo.GetStore(id)
 	if err != nil {
 		return err
 	}
