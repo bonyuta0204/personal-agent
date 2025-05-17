@@ -13,6 +13,13 @@ type Document struct {
 	Embedding []float64
 	Tags      []string
 
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	ModifiedAt time.Time // The time when the document was last modified. This is used to detect changes in the document.
+	CreatedAt  time.Time
+	UpdatedAt  time.Time
+}
+
+// represent a document entry in the knowledge base
+type DocumentEntry struct {
+	Path       string
+	ModifiedAt time.Time
 }

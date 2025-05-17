@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log"
 	"time"
 
 	"github.com/bonyuta0204/personal-agent/go/internal/domain/model"
@@ -65,6 +66,7 @@ func (r *documentRepository) SaveDocument(document *model.Document) error {
 		return err
 	}
 
+	log.Printf("Saving document %s", document.Path)
 	if exists {
 		// Update existing document
 		_, err = tx.ExecContext(ctx, `

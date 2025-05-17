@@ -2,6 +2,7 @@ package document
 
 import (
 	"fmt"
+	"log"
 
 	"github.com/bonyuta0204/personal-agent/go/internal/domain/model"
 	"github.com/bonyuta0204/personal-agent/go/internal/domain/port/repository"
@@ -30,7 +31,7 @@ func (u *SyncUsecase) Sync(storeId string) error {
 	if err != nil {
 		return fmt.Errorf("invalid store ID format: %v", err)
 	}
-	
+
 	store, err := u.storeRepo.GetStore(id)
 	if err != nil {
 		return err
@@ -48,19 +49,19 @@ func (u *SyncUsecase) Sync(storeId string) error {
 		return fmt.Errorf("failed to create storage: %w", err)
 	}
 
-	paths, err := storage.GetAllPaths()
+	entries, err := storage.GetDocumentEntries()
 	if err != nil {
 		return fmt.Errorf("failed to get all paths: %w", err)
 	}
 
-	for _, path := range paths {
-		document, err := storage.FetchDocument(path)
+	for _, entry := range entries {
+		document, err := storage.FetchDocument(store.ID(), entry.Path)
 		if err != nil {
-			return fmt.Errorf("failed to fetch document: %w", err)
+			log.Printf("failed to fetch document: %s", err)
 		}
 
 		if err := u.documentRepo.SaveDocument(document); err != nil {
-			return fmt.Errorf("failed to save document: %w", err)
+			log.Printf("failed to save document: %s", err)
 		}
 
 	}

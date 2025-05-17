@@ -7,9 +7,9 @@ import (
 type Storage interface {
 	SaveDocument(document *model.Document) error
 	SaveMemory(memory *model.Memory) error
-	FetchDocument(path string) (*model.Document, error)
+	FetchDocument(storeId model.StoreId, path string) (*model.Document, error)
 	FetchMemory(path string) (*model.Memory, error)
-	GetAllPaths() ([]string, error)
+	GetDocumentEntries() ([]model.DocumentEntry, error)
 }
 
 type StorageFactory interface {

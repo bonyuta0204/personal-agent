@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -18,9 +19,10 @@ import (
 // GitHubStorage implements the storage.Storage interface for GitHub
 // This is an infrastructure layer component
 type GitHubStorage struct {
-	client    *github.Client
-	repoOwner string
-	repoName  string
+	client     *github.Client
+	repoOwner  string
+	repoName   string
+	tmpDirPath string // Path to the local repository clone
 }
 
 // NewGitHubStorage creates a new GitHub storage instance
@@ -100,48 +102,43 @@ func (s *GitHubStorage) SaveMemory(memory *model.Memory) error {
 	return s.SaveDocument(doc)
 }
 
-// FetchDocument implements the Storage interface
-func (s *GitHubStorage) FetchDocument(path string) (*model.Document, error) {
-	ctx := context.Background()
+// fetchFileContent is a helper method that handles fetching file content either from local file system or GitHub API
+func (s *GitHubStorage) fetchFileContent(path string) (content string, modTime time.Time, err error) {
 
-	fileContent, _, _, err := s.client.Repositories.GetContents(ctx, s.repoOwner, s.repoName, path, nil)
-	if err != nil {
-		return nil, fmt.Errorf("error fetching file: %w", err)
-	}
-
-	content, err := fileContent.GetContent()
-	if err != nil {
-		return nil, fmt.Errorf("error getting file content: %w", err)
-	}
-
-	// Get commit info to get timestamps
-	commits, _, err := s.client.Repositories.ListCommits(ctx, s.repoOwner, s.repoName, &github.CommitsListOptions{
-		Path: path,
-		ListOptions: github.ListOptions{
-			PerPage: 1,
-		},
-	})
-	if err != nil {
-		return nil, fmt.Errorf("error getting commit info: %w", err)
-	}
-
-	var createdAt, updatedAt time.Time
-	if len(commits) > 0 {
-		updatedAt = commits[0].Commit.Committer.GetDate().Time
-		createdAt = updatedAt // Default to same as updatedAt
-
-		// Try to find the first commit to get creation time
-		firstCommit, _, err := s.client.Repositories.GetCommit(ctx, s.repoOwner, s.repoName, *fileContent.SHA, nil)
-		if err == nil && firstCommit != nil && firstCommit.Commit != nil && firstCommit.Commit.Committer != nil {
-			createdAt = firstCommit.Commit.Committer.GetDate().Time
+	if s.tmpDirPath == "" {
+		if err := s.downloadRepository(); err != nil {
+			return "", time.Time{}, fmt.Errorf("error downloading repository: %w", err)
 		}
+	}
+	// If we have a local clone, read from the file system
+	fullPath := filepath.Join(s.tmpDirPath, path)
+	contentBytes, err := os.ReadFile(fullPath)
+	if err != nil {
+		return "", time.Time{}, fmt.Errorf("error reading file from local clone: %w", err)
+	}
+
+	// Get file info for modification time
+	fileInfo, err := os.Stat(fullPath)
+	if err != nil {
+		return "", time.Time{}, fmt.Errorf("error getting file info: %w", err)
+	}
+
+	return string(contentBytes), fileInfo.ModTime(), nil
+}
+
+// FetchDocument implements the Storage interface
+func (s *GitHubStorage) FetchDocument(storeId model.StoreId, path string) (*model.Document, error) {
+	content, modTime, err := s.fetchFileContent(path)
+	if err != nil {
+		return nil, err
 	}
 
 	return &model.Document{
 		Path:      path,
+		StoreId:   storeId,
 		Content:   content,
-		CreatedAt: createdAt,
-		UpdatedAt: updatedAt,
+		CreatedAt: modTime, // Best we can do without git history
+		UpdatedAt: modTime,
 	}, nil
 }
 
@@ -155,65 +152,74 @@ func (s *GitHubStorage) FetchMemory(path string) (*model.Memory, error) {
 		path += ".md"
 	}
 
-	doc, err := s.FetchDocument(path)
+	// Use fetchFileContent directly to avoid unnecessary document creation
+	content, modTime, err := s.fetchFileContent(path)
 	if err != nil {
 		return nil, err
 	}
 
 	// Strip the .memories/ prefix and .md suffix for the memory path
-	memoryPath := strings.TrimSuffix(strings.TrimPrefix(doc.Path, ".memories/"), ".md")
+	memoryPath := strings.TrimSuffix(strings.TrimPrefix(path, ".memories/"), ".md")
 
 	return &model.Memory{
 		Path:      memoryPath,
-		Content:   doc.Content,
-		CreatedAt: doc.CreatedAt,
-		UpdatedAt: doc.UpdatedAt,
+		Content:   content,
+		CreatedAt: modTime,
+		UpdatedAt: modTime,
 	}, nil
 }
 
-// GetAllPaths implements the Storage interface
-func (s *GitHubStorage) GetAllPaths() ([]string, error) {
-	ctx := context.Background()
-	var allPaths []string
+// GetDocumentEntriesFromFS recursively gets all file paths from the local file system
+func (s *GitHubStorage) GetDocumentEntriesFromFS(dir string) ([]model.DocumentEntry, error) {
+	var documentEntries []model.DocumentEntry
 
-	// Get all files in the repository
-	_, dirContents, _, err := s.client.Repositories.GetContents(ctx, s.repoOwner, s.repoName, ".", nil)
+	entries, err := os.ReadDir(dir)
 	if err != nil {
-		return nil, fmt.Errorf("error getting repository contents: %w", err)
+		return nil, fmt.Errorf("error reading directory %s: %w", dir, err)
 	}
 
-	// Recursively get all file paths
-	var traverseDir func(path string) error
-	traverseDir = func(path string) error {
-		_, dirContents, _, err := s.client.Repositories.GetContents(ctx, s.repoOwner, s.repoName, path, nil)
-		if err != nil {
-			return fmt.Errorf("error getting contents of %s: %w", path, err)
-		}
-
-		for _, content := range dirContents {
-			if content.GetType() == "dir" {
-				if err := traverseDir(content.GetPath()); err != nil {
-					return err
-				}
-			} else if content.GetType() == "file" {
-				allPaths = append(allPaths, content.GetPath())
-			}
-		}
-		return nil
-	}
-
-	// Start traversal from root
-	for _, content := range dirContents {
-		if content.GetType() == "dir" {
-			if err := traverseDir(content.GetPath()); err != nil {
+	for _, entry := range entries {
+		fullPath := filepath.Join(dir, entry.Name())
+		if entry.IsDir() {
+			subEntries, err := s.GetDocumentEntriesFromFS(fullPath)
+			if err != nil {
 				return nil, err
 			}
-		} else if content.GetType() == "file" {
-			allPaths = append(allPaths, content.GetPath())
+			documentEntries = append(documentEntries, subEntries...)
+		} else if entry.Type().IsRegular() {
+			// Convert to relative path from repo root
+			relPath, err := filepath.Rel(s.tmpDirPath, fullPath)
+			if err != nil {
+				return nil, fmt.Errorf("error getting relative path: %w", err)
+			}
+			fileInfo, err := os.Stat(fullPath)
+			if err != nil {
+				return nil, fmt.Errorf("error getting file info: %w", err)
+			}
+			documentEntries = append(documentEntries, model.DocumentEntry{
+				Path:       relPath,
+				ModifiedAt: fileInfo.ModTime(),
+			})
 		}
 	}
 
-	return allPaths, nil
+	return documentEntries, nil
+}
+
+// GetDocumentEntries implements the Storage interface
+func (s *GitHubStorage) GetDocumentEntries() ([]model.DocumentEntry, error) {
+	if s.tmpDirPath == "" {
+		if err := s.downloadRepository(); err != nil {
+			return nil, fmt.Errorf("error downloading repository: %w", err)
+		}
+	}
+
+	// If we have a local clone, read from the file system
+	paths, err := s.GetDocumentEntriesFromFS(s.tmpDirPath)
+	if err != nil {
+		return nil, fmt.Errorf("error getting paths from local clone: %w", err)
+	}
+	return paths, nil
 }
 
 // GitHubStorageFactory implements the StorageFactory interface for GitHub
@@ -237,4 +243,76 @@ func (f *GitHubStorageFactory) CreateStorage(store model.DocumentStore) (port.St
 	}
 
 	return NewGitHubStorage(githubStore.Repo())
+}
+
+// Download Repository tarball and extract it to tmpDirPath
+func (s *GitHubStorage) downloadRepository() error {
+	ctx := context.Background()
+
+	// Create a temporary directory to store the downloaded tarball
+	tmpDir, err := os.MkdirTemp("", "github-repo-*")
+	if err != nil {
+		return fmt.Errorf("error creating temp directory: %w", err)
+	}
+
+	// Get the tarball URL for the repository
+	url, _, err := s.client.Repositories.GetArchiveLink(ctx, s.repoOwner, s.repoName, github.Tarball, &github.RepositoryContentGetOptions{}, 1)
+	if err != nil {
+		os.RemoveAll(tmpDir) // Clean up temp dir on error
+		return fmt.Errorf("error getting archive link: %w", err)
+	}
+
+	// Download the tarball
+	resp, err := s.client.Client().Get(url.String())
+	if err != nil {
+		os.RemoveAll(tmpDir) // Clean up temp dir on error
+		return fmt.Errorf("error downloading repository: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		os.RemoveAll(tmpDir) // Clean up temp dir on error
+		return fmt.Errorf("error downloading repository: %s", resp.Status)
+	}
+
+	// Save the tarball to a temporary file
+	tarballPath := filepath.Join(tmpDir, "repo.tar.gz")
+	file, err := os.Create(tarballPath)
+	if err != nil {
+		os.RemoveAll(tmpDir) // Clean up temp dir on error
+		return fmt.Errorf("error creating tarball file: %w", err)
+	}
+	defer file.Close()
+
+	_, err = file.ReadFrom(resp.Body)
+	if err != nil {
+		os.RemoveAll(tmpDir) // Clean up temp dir on error
+		return fmt.Errorf("error saving tarball: %w", err)
+	}
+
+	// Create a directory to extract the tarball
+	extractDir := filepath.Join(tmpDir, "extracted")
+	err = os.Mkdir(extractDir, 0755)
+	if err != nil {
+		os.RemoveAll(tmpDir) // Clean up temp dir on error
+		return fmt.Errorf("error creating extraction directory: %w", err)
+	}
+
+	// Extract the tarball
+	cmd := exec.Command("tar", "-xzf", tarballPath, "-C", extractDir, "--strip-components=1")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		os.RemoveAll(tmpDir) // Clean up temp dir on error
+		return fmt.Errorf("error extracting tarball: %v\nOutput: %s", err, string(output))
+	}
+
+	// Clean up the tarball
+	err = os.Remove(tarballPath)
+	if err != nil {
+		// Non-fatal error, just log it
+		fmt.Printf("warning: failed to remove tarball: %v\n", err)
+	}
+
+	s.tmpDirPath = filepath.Join(extractDir)
+	return nil
 }
