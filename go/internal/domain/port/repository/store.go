@@ -1,6 +1,13 @@
 package repository
 
-import "github.com/bonyuta0204/personal-agent/go/internal/domain/model"
+import (
+	"errors"
+
+	"github.com/bonyuta0204/personal-agent/go/internal/domain/model"
+)
+
+// ErrStoreNotFound is returned when a store is not found in the repository
+var ErrStoreNotFound = errors.New("store not found")
 
 type StoreRepository interface {
 	GetStore(storeId model.StoreId) (model.DocumentStore, error)
