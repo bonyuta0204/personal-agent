@@ -3,6 +3,7 @@ package storage
 import (
 	"context"
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -13,8 +14,13 @@ import (
 	"golang.org/x/oauth2"
 
 	"github.com/bonyuta0204/personal-agent/go/internal/domain/model"
-	port "github.com/bonyuta0204/personal-agent/go/internal/domain/port/storage"
 )
+
+// logDuration logs the time taken by a function with the given name
+func logDuration(start time.Time, name string) {
+	duration := time.Since(start)
+	log.Printf("%s took %s", name, duration)
+}
 
 // GitHubStorage implements the storage.Storage interface for GitHub
 // This is an infrastructure layer component
@@ -94,12 +100,30 @@ func (s *GitHubStorage) SaveMemory(memory *model.Memory) error {
 		path += ".md"
 	}
 
-	doc := &model.Document{
-		Path:    path,
-		Content: memory.Content,
+	ctx := context.Background()
+
+	// Prepare file content
+	content := []byte(memory.Content)
+	message := fmt.Sprintf("Add/update memory: %s", path)
+
+	// Check if file exists to determine if this is an update
+	_, _, _, err := s.client.Repositories.GetContents(ctx, s.repoOwner, s.repoName, path, nil)
+	if err != nil && !strings.Contains(err.Error(), "404 Not Found") {
+		return fmt.Errorf("error checking if memory file exists: %w", err)
 	}
 
-	return s.SaveDocument(doc)
+	// Create or update file
+	_, _, err = s.client.Repositories.CreateFile(ctx, s.repoOwner, s.repoName, path, &github.RepositoryContentFileOptions{
+		Message: github.String(message),
+		Content: content,
+		SHA:     nil, // Will be populated by GitHub for updates
+	})
+
+	if err != nil {
+		return fmt.Errorf("error creating/updating memory file: %w", err)
+	}
+
+	return nil
 }
 
 // fetchFileContent is a helper method that handles fetching file content either from local file system or GitHub API
@@ -134,11 +158,10 @@ func (s *GitHubStorage) FetchDocument(storeId model.StoreId, path string) (*mode
 	}
 
 	return &model.Document{
-		Path:      path,
-		StoreId:   storeId,
-		Content:   content,
-		CreatedAt: modTime, // Best we can do without git history
-		UpdatedAt: modTime,
+		Path:       path,
+		StoreId:    storeId,
+		Content:    content,
+		ModifiedAt: modTime,
 	}, nil
 }
 
@@ -171,6 +194,7 @@ func (s *GitHubStorage) FetchMemory(path string) (*model.Memory, error) {
 
 // GetDocumentEntriesFromFS recursively gets all file paths from the local file system
 func (s *GitHubStorage) GetDocumentEntriesFromFS(dir string) ([]model.DocumentEntry, error) {
+
 	var documentEntries []model.DocumentEntry
 
 	entries, err := os.ReadDir(dir)
@@ -209,45 +233,31 @@ func (s *GitHubStorage) GetDocumentEntriesFromFS(dir string) ([]model.DocumentEn
 // GetDocumentEntries implements the Storage interface
 func (s *GitHubStorage) GetDocumentEntries() ([]model.DocumentEntry, error) {
 	if s.tmpDirPath == "" {
+		log.Printf("No local clone found, downloading repository...")
 		if err := s.downloadRepository(); err != nil {
 			return nil, fmt.Errorf("error downloading repository: %w", err)
 		}
+	} else {
+		log.Printf("Using existing local clone at %s", s.tmpDirPath)
 	}
 
 	// If we have a local clone, read from the file system
+	log.Printf("Getting document entries from local filesystem...")
 	paths, err := s.GetDocumentEntriesFromFS(s.tmpDirPath)
 	if err != nil {
 		return nil, fmt.Errorf("error getting paths from local clone: %w", err)
 	}
+	log.Printf("Found %d document entries", len(paths))
 	return paths, nil
 }
 
-// GitHubStorageFactory implements the StorageFactory interface for GitHub
-type GitHubStorageFactory struct{}
-
-// NewGitHubStorageFactory creates a new GitHub storage factory
-func NewGitHubStorageFactory() *GitHubStorageFactory {
-	return &GitHubStorageFactory{}
-}
-
-// CreateStorage creates a new GitHub storage instance
-func (f *GitHubStorageFactory) CreateStorage(store model.DocumentStore) (port.Storage, error) {
-	if store.Type() != model.StoreTypeGitHub {
-		return nil, fmt.Errorf("unsupported store type: %s", store.Type())
-	}
-
-	// Type assert to GitHubStore to access GitHub-specific fields
-	githubStore, ok := store.(*model.GitHubStore)
-	if !ok {
-		return nil, fmt.Errorf("invalid store type for GitHub")
-	}
-
-	return NewGitHubStorage(githubStore.Repo())
-}
-
-// Download Repository tarball and extract it to tmpDirPath
+// downloadRepository downloads the repository tarball and extracts it to a temporary directory
 func (s *GitHubStorage) downloadRepository() error {
+	start := time.Now()
+	defer logDuration(start, "downloadRepository")
+
 	ctx := context.Background()
+	log.Printf("Starting repository download for %s/%s", s.repoOwner, s.repoName)
 
 	// Create a temporary directory to store the downloaded tarball
 	tmpDir, err := os.MkdirTemp("", "github-repo-*")
