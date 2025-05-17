@@ -12,6 +12,7 @@ type Memory struct {
 	Embedding []float64
 	Tags      []string
 
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	ModifiedAt time.Time
+	CreatedAt  time.Time
+	UpdatedAt  time.Time
 }
