@@ -7,6 +7,7 @@ import (
 
 	"github.com/bonyuta0204/personal-agent/go/internal/domain/model"
 	database "github.com/bonyuta0204/personal-agent/go/internal/infrastructure/database"
+	embeddingProvider "github.com/bonyuta0204/personal-agent/go/internal/infrastructure/embedding"
 	"github.com/bonyuta0204/personal-agent/go/internal/infrastructure/repository/postgres"
 	storageFactory "github.com/bonyuta0204/personal-agent/go/internal/infrastructure/storage"
 	"github.com/bonyuta0204/personal-agent/go/internal/usecase/document"
@@ -61,8 +62,14 @@ var syncDocumentCmd = &cobra.Command{
 		// Initialize storage factory provider
 		storageFactoryProvider := storageFactory.NewStorageFactoryProvider()
 
+		// Initialize embedding provider
+		openaiProvider, err := embeddingProvider.NewOpenAIProvider()
+		if err != nil {
+			return fmt.Errorf("failed to create embedding provider: %w", err)
+		}
+
 		// Initialize sync use case
-		syncUsecase := document.NewSyncUsecase(storeRepo, documentRepo, storageFactoryProvider)
+		syncUsecase := document.NewSyncUsecase(storeRepo, documentRepo, storageFactoryProvider, openaiProvider)
 
 		// Execute the sync
 		fmt.Printf("Starting sync for store ID: %d\n", storeID)

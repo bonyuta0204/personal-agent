@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
+	"strings"
 	"time"
 
 	"github.com/bonyuta0204/personal-agent/go/internal/domain/model"
@@ -47,13 +49,23 @@ func (r *documentRepository) SaveDocument(document *model.Document) error {
 	}
 
 	// Convert embedding to PostgreSQL vector format
-	var embedding interface{} = nil
+	const expectedDim = 1536
+	var embeddingStr string = ""
 	if len(document.Embedding) > 0 {
-		sql := "SELECT $1::vector"
-		err = tx.Get(&embedding, sql, pq.Array(document.Embedding))
-		if err != nil {
-			return err
+		if len(document.Embedding) != expectedDim {
+			return fmt.Errorf("invalid embedding dimension: got %d, want %d", len(document.Embedding), expectedDim)
 		}
+		for i, v := range document.Embedding {
+			if math.IsNaN(float64(v)) || math.IsInf(float64(v), 0) {
+				return fmt.Errorf("invalid embedding value at position %d: %v", i, v)
+			}
+		}
+		// Convert to JSON array format
+		parts := make([]string, len(document.Embedding))
+		for i, v := range document.Embedding {
+			parts[i] = fmt.Sprintf("%f", v)
+		}
+		embeddingStr = "[" + strings.Join(parts, ",") + "]"
 	}
 
 	// Check if document exists
@@ -78,7 +90,7 @@ func (r *documentRepository) SaveDocument(document *model.Document) error {
 			    updated_at = NOW()
 			WHERE store_id = $6 AND path = $7`,
 			document.Content,
-			embedding,
+			embeddingStr,
 			tagsJSON,
 			document.ModifiedAt,
 			document.SHA,
@@ -94,7 +106,7 @@ func (r *documentRepository) SaveDocument(document *model.Document) error {
 			document.StoreId,
 			document.Path,
 			document.Content,
-			embedding,
+			embeddingStr,
 			tagsJSON,
 			document.ModifiedAt,
 			document.SHA,

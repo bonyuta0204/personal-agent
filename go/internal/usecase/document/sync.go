@@ -23,6 +23,7 @@ func NewSyncUsecase(storeRepo repository.StoreRepository, documentRepo repositor
 		storeRepo:              storeRepo,
 		documentRepo:           documentRepo,
 		storageFactoryProvider: factoryProvider,
+		embeddingProvider:      embeddingProvider,
 	}
 }
 
