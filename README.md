@@ -2,23 +2,92 @@
 
 📚 **Purpose**
 
-> A personal agent that helps manage and interact with your documents and information sources.
-> This repository contains tools for document synchronization, storage, and retrieval.
+> An AI Agent that collects various contexts, and uses this information to enable chat and actions.
+> This repository aims to collect information from GitHub repositories, Slack, Notion, and other sources.
+> The agent has memory functionality to store and synchronize its own memories with external services (GitHub/Notion).
+
+**Current Status**: Work in Progress - Only GitHub data collection is currently implemented.
 
 ---
 
-## 1. Tech Stack
+## 1. System Architecture
 
-| Layer                    | Runtime                                         | Libraries / Notes                               |
+The Personal Agent system consists of several key components working together:
+
+```mermaid
+flowchart TD
+    subgraph "Data Sources"
+        GitHub[GitHub Repositories]
+        Slack[Slack Conversations]
+        Notion[Notion Documents]
+    end
+
+    subgraph "Data Collection & Sync"
+        Collector[Data Collection Service
+Go]
+        SyncService[Memory Sync Service
+Go]
+    end
+
+    subgraph "Data Storage"
+        DB[(PostgreSQL + pgvector)]
+    end
+
+    subgraph "AI Agent"
+        RAG[RAG System
+Deno]
+        EdgeFunction[Supabase Edge Function]
+    end
+
+    subgraph "User Interface"
+        SlackApp[Slack Integration]
+    end
+
+    GitHub --> Collector
+    Slack --> Collector
+    Notion --> Collector
+    
+    Collector --> DB
+    SyncService <--> DB
+    SyncService <--> GitHub
+    SyncService <--> Notion
+    
+    DB --> RAG
+    RAG --> EdgeFunction
+    SlackApp <--> EdgeFunction
+```
+
+### Key Components:
+
+1. **Data Collection Service**: Currently implemented in Go, collects data from various sources like GitHub, Slack, and Notion.
+
+2. **Memory Sync Service**: Synchronizes agent's memories with external services.
+
+3. **Data Storage**: PostgreSQL with pgvector extension for vector embeddings storage and retrieval.
+
+4. **AI Agent**: A RAG (Retrieval Augmented Generation) system built with Deno, hosted on Supabase Edge Functions.
+
+5. **User Interface**: Slack integration allowing users to chat with the agent directly from Slack.
+
+The system flow starts with collecting data from various sources, storing it in the database, and then using that data to power the AI agent's responses through the RAG system. Users interact with the agent primarily through Slack.
+
+---
+
+## 2. Tech Stack
+
+| Component                | Runtime / Technology                            | Libraries / Notes                               |
 | ------------------------ | ----------------------------------------------- | ----------------------------------------------- |
-| **Core Application**     | **Go**                                          | Clean architecture with domain-driven design    |
-| **Document Management**  | **Go**                                          | Document synchronization and storage            |
-| **Storage**              | GitHub, Local Storage                           | Multiple storage backends                       |
-| **Deployment**           | Docker Compose (local)                          | Simple containerized deployment                 |
+| **Data Collection**      | **Go**                                          | Clean architecture with domain-driven design    |
+| **Memory Sync**          | **Go**                                          | Document synchronization and storage            |
+| **Storage**              | **PostgreSQL + pgvector**                       | Vector embeddings for semantic search           |
+| **AI Agent**             | **Deno**                                        | RAG (Retrieval Augmented Generation)            |
+| **Hosting**              | **Supabase Edge Functions**                     | Serverless deployment for AI agent              |
+| **User Interface**       | **Slack App**                                   | Chat interface for interacting with agent       |
+| **Local Development**    | **Docker Compose**                              | Containerized local development environment     |
 
 ---
 
-## 2. Repository Layout
+## 3. Repository Layout
 
 ```
 personal-agent/
@@ -48,7 +117,7 @@ personal-agent/
 
 ---
 
-## 4. Quick Start (Local)
+## 4. Quick Start (Local)
 
 ```bash
 # 1. Clone the repository
@@ -63,14 +132,14 @@ cd go
 make build
 
 # 4. Run the CLI tool
-./bin/cli --help
+./bin/personal-agent --help
 ```
 
 > **⚠️ Environment variables** are documented in `go/.env.sample`.
 
 ---
 
-## 5. Storage Backends
+## 6. Storage Backends
 
 The application supports multiple storage backends:
 
@@ -81,7 +150,7 @@ Storage implementations are located in `go/internal/infrastructure/storage/`.
 
 ---
 
-## 6. Makefile Highlights
+## 7. Makefile Highlights
 
 ```makefile
 build:             ## Build the CLI tool
@@ -93,23 +162,35 @@ Check the `go/Makefile` for all available commands.
 
 ---
 
-## 7. Document Management
+## 8. CLI Commands
 
-The application provides commands for managing documents:
+The application provides a CLI tool with the following commands:
+
+### Store Management
 
 ```bash
-# List documents
-./bin/cli document list
+# List all document stores
+./bin/personal-agent store list
 
-# Sync documents
-./bin/cli document sync
+# Create a new document store (GitHub repository)
+./bin/personal-agent store create owner/repo
 ```
 
-Document operations are implemented in the `go/internal/usecase/document` package.
+### Document Management
+
+```bash
+# Sync documents from a specific store
+./bin/personal-agent document sync <store-id>
+
+# Sync with dry-run option (no changes)
+./bin/personal-agent document sync <store-id> --dry-run
+```
+
+Document operations are implemented in the `go/internal/usecase/document` package, and store operations in the `go/internal/usecase/store` package.
 
 ---
 
-## 8. Project Architecture
+## 9. Project Architecture
 
 The project follows clean architecture principles with a focus on domain-driven design:
 
@@ -121,7 +202,7 @@ This separation of concerns allows for easy testing and maintenance.
 
 ---
 
-## 9. Contributing
+## 10. Contributing
 
 1. Open a PR targeting `main`.
 2. Ensure `make test lint` passes.
@@ -129,10 +210,10 @@ This separation of concerns allows for easy testing and maintenance.
 
 ---
 
-## 10. Roadmap
+## 11. Roadmap
 
-* [ ] Add support for additional storage backends
-* [ ] Implement document versioning
+* [ ] Add support for additional data sources (Slack, Notion)
+* [ ] Implement memory functionality for the agent
+* [ ] Enable synchronization with external services
 * [ ] Add search functionality
 * [ ] Improve CLI user experience
-
