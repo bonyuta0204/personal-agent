@@ -16,42 +16,42 @@ The Personal Agent system consists of several key components working together:
 
 ```mermaid
 flowchart TD
-    subgraph "Data Sources"
-        GitHub[GitHub Repositories]
-        Slack[Slack Conversations]
-        Notion[Notion Documents]
+    %% Data sources and storage
+    subgraph DocumentStore["Document Store"]
+        GitHub["GitHub"]
+        Slack["Slack"]
+        Notion["Notion"]
     end
-
-    subgraph "Data Collection & Sync"
-        Collector[Data Collection Service
-Go]
-        SyncService[Memory Sync Service
-Go]
-    end
-
-    subgraph "Data Storage"
-        DB[(PostgreSQL + pgvector)]
-    end
-
-    subgraph "AI Agent"
-        RAG[RAG System
-Deno]
-        EdgeFunction[Supabase Edge Function]
-    end
-
-    subgraph "User Interface"
-        SlackApp[Slack Integration]
-    end
-
-    GitHub --> Collector
-    Slack --> Collector
-    Notion --> Collector
     
+    subgraph MemoryStore["Memory Store"]
+        GitHubMemory["GitHub"]
+    end
+    
+    %% Backend services
+    subgraph BackendServices["Backend Services"]
+        Collector["Data Collection Service (Go)"]
+        SyncService["Memory Sync Service (Go)"]
+    end
+
+    %% Database
+    DB[("PostgreSQL + pgvector")]
+    
+    %% AI components
+    subgraph AgentSystem["AI Agent System"]
+        RAG["RAG System (Deno)"]
+        EdgeFunction["Supabase Edge Function"]
+    end
+    
+    %% User interface
+    subgraph UserInterface["User Interface"]
+        SlackApp["Slack"]
+    end
+    
+    %% Data flow connections
+    DocumentStore --> Collector
     Collector --> DB
-    SyncService <--> DB
-    SyncService <--> GitHub
-    SyncService <--> Notion
-    
+    MemoryStore <--> SyncService
+    SyncService --> DB
     DB --> RAG
     RAG --> EdgeFunction
     SlackApp <--> EdgeFunction
