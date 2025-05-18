@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"log"
@@ -9,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/bonyuta0204/personal-agent/go/internal/infrastructure/util"
 
@@ -143,6 +145,11 @@ func (s *GitHubStorage) fetchFileContent(path string) (content string, modTime t
 		return "", time.Time{}, fmt.Errorf("error reading file from local clone: %w", err)
 	}
 
+	// Check if the file is binary
+	if isBinary(contentBytes) {
+		return "", time.Time{}, fmt.Errorf("skipping binary file: %s", path)
+	}
+
 	// Get file info for modification time
 	fileInfo, err := os.Stat(fullPath)
 	if err != nil {
@@ -150,6 +157,47 @@ func (s *GitHubStorage) fetchFileContent(path string) (content string, modTime t
 	}
 
 	return string(contentBytes), fileInfo.ModTime(), nil
+}
+
+// isBinary checks if a byte slice contains binary data by looking for null bytes
+// and checking for common binary file signatures.
+func isBinary(data []byte) bool {
+	// Empty files are not binary
+	if len(data) == 0 {
+		return false
+	}
+
+	// Check if it's valid UTF-8 text
+	if !utf8.Valid(data) {
+		return true
+	}
+
+	// Only consider files with .pptx, .xlsx, .docx, .pdf, .jpg, .png, etc. as binary
+	// For markdown files with Japanese text, we want to process them as text
+
+	// For image files and other known binary formats, check magic numbers
+	if len(data) > 8 {
+		// PNG signature
+		if bytes.HasPrefix(data, []byte{0x89, 0x50, 0x4E, 0x47}) {
+			return true
+		}
+		// JPEG signatures
+		if bytes.HasPrefix(data, []byte{0xFF, 0xD8, 0xFF}) {
+			return true
+		}
+		// PDF signature
+		if bytes.HasPrefix(data, []byte{0x25, 0x50, 0x44, 0x46}) { // %PDF
+			return true
+		}
+		// ZIP signatures (used by Office files like .docx, .xlsx, .pptx)
+		if bytes.HasPrefix(data, []byte{0x50, 0x4B, 0x03, 0x04}) {
+			return true
+		}
+	}
+
+	// For text files with UTF-8 characters (like Japanese text),
+	// we'll be more lenient and not consider them binary
+	return false
 }
 
 // FetchDocument implements the Storage interface

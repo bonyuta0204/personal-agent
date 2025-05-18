@@ -59,15 +59,17 @@ func (u *SyncUsecase) Sync(storeId string) error {
 	}
 
 	// Fetch all documents from storage
-	var documents = make([]*model.Document, len(entries))
+	var documents []*model.Document
 
-	for i, entry := range entries {
+	for _, entry := range entries {
 		document, err := storage.FetchDocument(store.ID(), entry.Path)
 		if err != nil {
 			log.Printf("failed to fetch document %s: %v", entry.Path, err)
 			continue
 		}
-		documents[i] = document
+		if document != nil {
+			documents = append(documents, document)
+		}
 	}
 
 	// Find unchanged documents
@@ -89,7 +91,7 @@ func (u *SyncUsecase) Sync(storeId string) error {
 			continue
 		}
 
-		if !existingSHASet[doc.SHA] || doc.Embedding == nil {
+		if !existingSHASet[doc.SHA] {
 			// create embedding
 			embedding, err := u.embeddingProvider.Embed(doc.Content)
 			if err != nil {

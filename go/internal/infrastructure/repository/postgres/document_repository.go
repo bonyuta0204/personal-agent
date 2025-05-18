@@ -146,7 +146,9 @@ func (r *documentRepository) FindExistingSHAs(documents []*model.Document) ([]st
 	var shas []string
 
 	for _, doc := range documents {
-		shas = append(shas, doc.SHA)
+		if doc != nil {
+			shas = append(shas, doc.SHA)
+		}
 	}
 
 	if len(shas) == 0 {
