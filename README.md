@@ -1,137 +1,208 @@
-# ✨ AI Project PM — Monorepo
+# ✨ Personal Agent
 
 📚 **Purpose**
 
-> Centralise project knowledge (Slack, GitHub + Obsidian, Notion) and offer an "AI PM" that answers questions through a hybrid RAG pipeline.
-> This repository contains *all* ingest, synchronisation, retrieval, and API layers.
+> An AI Agent that collects various contexts, and uses this information to enable chat and actions.
+> This repository aims to collect information from GitHub repositories, Slack, Notion, and other sources.
+> The agent has memory functionality to store and synchronize its own memories with external services (GitHub/Notion).
+
+**Current Status**: Work in Progress - Only GitHub data collection is currently implemented.
 
 ---
 
-## 1. Tech Stack
+## 1. System Architecture
 
-| Layer                    | Runtime                                         | Libraries / Notes                               |
+The Personal Agent system consists of several key components working together:
+
+```mermaid
+flowchart TD
+    %% Data sources and storage
+    subgraph DocumentStore["Document Store"]
+        GitHub["GitHub"]
+        Slack["Slack"]
+        Notion["Notion"]
+    end
+    
+    subgraph MemoryStore["Memory Store"]
+        GitHubMemory["GitHub"]
+    end
+    
+    %% Backend services
+    subgraph BackendServices["Backend Services"]
+        Collector["Data Collection Service (Go)"]
+        SyncService["Memory Sync Service (Go)"]
+    end
+
+    %% Database
+    DB[("PostgreSQL + pgvector")]
+    
+    %% AI components
+    subgraph AgentSystem["AI Agent System"]
+        RAG["RAG System (Deno)"]
+        EdgeFunction["Supabase Edge Function"]
+    end
+    
+    %% User interface
+    subgraph UserInterface["User Interface"]
+        SlackApp["Slack"]
+    end
+    
+    %% Data flow connections
+    DocumentStore --> Collector
+    Collector --> DB
+    MemoryStore <--> SyncService
+    SyncService --> DB
+    DB --> RAG
+    RAG --> EdgeFunction
+    SlackApp <--> EdgeFunction
+```
+
+### Key Components:
+
+1. **Data Collection Service**: Currently implemented in Go, collects data from various sources like GitHub, Slack, and Notion.
+
+2. **Memory Sync Service**: Synchronizes agent's memories with external services.
+
+3. **Data Storage**: PostgreSQL with pgvector extension for vector embeddings storage and retrieval.
+
+4. **AI Agent**: A RAG (Retrieval Augmented Generation) system built with Deno, hosted on Supabase Edge Functions.
+
+5. **User Interface**: Slack integration allowing users to chat with the agent directly from Slack.
+
+The system flow starts with collecting data from various sources, storing it in the database, and then using that data to power the AI agent's responses through the RAG system. Users interact with the agent primarily through Slack.
+
+---
+
+## 2. Tech Stack
+
+| Component                | Runtime / Technology                            | Libraries / Notes                               |
 | ------------------------ | ----------------------------------------------- | ----------------------------------------------- |
-| **Ingest & Sync**        | **Go 1.22**                                     | `chi`, `pgx/v5`, `sqlc`, `pgmq-go`              |
-| **RAG API & Embeddings** | **Node 20 (TypeScript)**                        | `LangChain 0.3`, `Fastify`, `@langchain/openai` |
-| **Database**             | Postgres 16 + `pgvector 0.7` + `pgmq`           | HNSW index enabled                              |
-| **CI/CD**                | GitHub Actions                                  | Go + Node matrix build                          |
-| **Deployment**           | Docker Compose (local) · Helm charts (optional) |                                                 |
+| **Data Collection**      | **Go**                                          | Clean architecture with domain-driven design    |
+| **Memory Sync**          | **Go**                                          | Document synchronization and storage            |
+| **Storage**              | **PostgreSQL + pgvector**                       | Vector embeddings for semantic search           |
+| **AI Agent**             | **Deno**                                        | RAG (Retrieval Augmented Generation)            |
+| **Hosting**              | **Supabase Edge Functions**                     | Serverless deployment for AI agent              |
+| **User Interface**       | **Slack App**                                   | Chat interface for interacting with agent       |
+| **Local Development**    | **Docker Compose**                              | Containerized local development environment     |
 
 ---
 
-## 2. Repository Layout
+## 3. Repository Layout
 
 ```
-repo-root/
+personal-agent/
 ├─ go/                       # Go sources
 │  ├─ internal/              # Private application code
 │  │   ├─ domain/            # Enterprise business rules
 │  │   │   ├─ model/         # Core domain entities and value objects
-│  │   │   └─ service/       # Domain services (pure business logic)
+│  │   │   └─ port/          # Interfaces defining domain boundaries
 │  │   ├─ usecase/           # Application business rules
-│  │   ├─ adapter/           # Interface adapters
-│  │   └─ infrastructure/    # Frameworks, drivers, and external agency
-│  ├─ pkg/                   # Public Go libraries
+│  │   │   ├─ document/      # Document-related use cases
+│  │   │   └─ store/         # Storage-related use cases
+│  │   └─ infrastructure/    # Frameworks, drivers, and external implementations
+│  │       ├─ database/      # Database connections and utilities
+│  │       ├─ embedding/     # Embedding service implementations
+│  │       ├─ repository/    # Repository implementations
+│  │       ├─ storage/       # Storage implementations (GitHub, local)
+│  │       └─ util/          # Utility functions
 │  ├─ cmd/                   # Application entry points
-│  │   ├─ ingest/            # Slack & GitHub (Obsidian) webhooks
-│  │   ├─ sync/              # Notion ↔ memories delta sync
-│  │   └─ migrate/           # DB migrations CLI
-│  └─ db/                    # SQL migrations & sqlc.yaml
+│  │   └─ cli/               # Command-line interface
+│  ├─ config/                # Configuration files
+│  ├─ migrations/            # Database migrations
+│  └─ bin/                   # Compiled binaries
 │
-├─ node/                     # TypeScript sources
-│  ├─ services/
-│  │   ├─ rag-api/           # /query endpoint (Fastify + LangChain)
-│  │   └─ embed-worker/      # Queue consumer → embeddings
-│  └─ lib/                   # Shared TS utilities
-│
-├─ deploy/                   # docker‑compose, k8s manifests, Terraform
-├─ .github/workflows/        # CI Pipelines
-├─ Makefile                  # One‑liner dev commands
+├─ docker-compose.yml        # Docker Compose configuration
 └─ README.md (← **YOU ARE HERE**)
 ```
 
 ---
 
-## 3. Services
-
-| Service          | Binary / Script              | Port   | Description                                                                        |
-| ---------------- | ---------------------------- | ------ | ---------------------------------------------------------------------------------- |
-| **ingest**       | `go/cmd/ingest`              | `8080` | Receives Slack & GitHub webhooks, stores raw events, enqueues embedding jobs.      |
-| **sync**         | `go/cmd/sync`                | `8081` | Polls / Webhook from Notion, updates the `memories` table, emits embedding jobs.   |
-| **migrate**      | `go/cmd/migrate`             | –      | Runs `golang-migrate`‐compatible SQL migrations.                                   |
-| **embed‑worker** | `node/services/embed-worker` | –      | Dequeues from `pgmq`, calls embedding API, UPSERTs `documents`.                    |
-| **rag‑api**      | `node/services/rag-api`      | `3000` | `/query` endpoint → LangChain retriever → LLM router (GPT‑4o / Claude 3 / Gemini). |
-
----
-
-## 4. Quick Start (Local)
+## 4. Quick Start (Local)
 
 ```bash
-# 1. Clone & setup env vars
-cp .env.example .env
+# 1. Clone the repository
+git clone https://github.com/bonyuta0204/personal-agent.git
+cd personal-agent
 
-# 2. Launch Postgres (with pgvector/pgmq) + services
-make up           # docker‑compose up ‑d postgres
+# 2. Setup environment variables
+cp go/.env.sample go/.env
 
-# 3. Apply database migrations
-make migrate-up   # go run ./go/cmd/migrate up
+# 3. Build the CLI tool
+cd go
+make build
 
-# 4. Start Go services (live‑reload)
-make run-ingest   # air -c .air.toml
-make run-sync
-
-# 5. Start Node services
-cd node && pnpm dev        # runs rag‑api + embed‑worker via ts‑node‑dev
+# 4. Run the CLI tool
+./bin/personal-agent --help
 ```
 
-> **⚠️ Environment variables** are documented in `.env.example`.
+> **⚠️ Environment variables** are documented in `go/.env.sample`.
 
 ---
 
-## 5. Database Workflow
+## 6. Storage Backends
 
-1. **Write migration** → `go/db/migrations/20240517_add_documents.up.sql`.
-2. `make migrate-up` to apply locally (uses `golang-migrate`).
-3. CI applies migrations against the test container; production uses the same binary.
+The application supports multiple storage backends:
 
-SQL queries are generated into `go/internal/infrastructure/store` via **sqlc** for type‑safe access.
+1. **GitHub Storage** - Store documents in a GitHub repository
+2. **Local Storage** - Store documents locally on your machine
+
+Storage implementations are located in `go/internal/infrastructure/storage/`.
 
 ---
 
-## 6. Makefile Highlights
+## 7. Makefile Highlights
 
 ```makefile
-up:                ## Start postgres
-migrate-up:        ## Apply latest migrations
-run-ingest:        ## Run Go ingest with live reload
-run-sync:          ## Run Go sync with live reload
-run-node:          ## Start TS services (rag-api + worker)
-lint test:         ## Static checks & unit tests
+build:             ## Build the CLI tool
+test:              ## Run tests
+clean:             ## Clean build artifacts
 ```
 
-Run `make help` to list all targets.
+Check the `go/Makefile` for all available commands.
 
 ---
 
-## 7. CI Pipeline (GitHub Actions)
+## 8. CLI Commands
 
-| Job                         | Purpose                                                             |
-| --------------------------- | ------------------------------------------------------------------- |
-| **go-test**                 | Lint (`golangci-lint`) & `go test ./...` against pgvector container |
-| **node-test**               | `pnpm i` → ESLint + Vitest                                          |
-| **docker‑build** (optional) | Build multi‑arch images for each service                            |
+The application provides a CLI tool with the following commands:
+
+### Store Management
+
+```bash
+# List all document stores
+./bin/personal-agent store list
+
+# Create a new document store (GitHub repository)
+./bin/personal-agent store create owner/repo
+```
+
+### Document Management
+
+```bash
+# Sync documents from a specific store
+./bin/personal-agent document sync <store-id>
+
+# Sync with dry-run option (no changes)
+./bin/personal-agent document sync <store-id> --dry-run
+```
+
+Document operations are implemented in the `go/internal/usecase/document` package, and store operations in the `go/internal/usecase/store` package.
 
 ---
 
-## 8. Deployment
+## 9. Project Architecture
 
-1. **Docker Compose** for single‑host PoC.
-2. **Kubernetes**: use `deploy/k8s/` manifests (Helm chart WIP).
-3. **Supabase → RDS migration**: pg\_dump & restore; services rely only on `DATABASE_URL`.
+The project follows clean architecture principles with a focus on domain-driven design:
+
+1. **Domain Layer** - Contains core business entities and interfaces
+2. **Use Case Layer** - Implements application-specific business rules
+3. **Infrastructure Layer** - Provides concrete implementations of interfaces
+
+This separation of concerns allows for easy testing and maintenance.
 
 ---
 
-## 9. Contributing
+## 10. Contributing
 
 1. Open a PR targeting `main`.
 2. Ensure `make test lint` passes.
@@ -139,14 +210,10 @@ Run `make help` to list all targets.
 
 ---
 
-## 10. Roadmap
+## 11. Roadmap
 
-* [ ] JWT‑based auth for `/query` (Slack‑signed): **Next**
-* [ ] Add GitHub PR metadata to retrieval filters
-* [ ] CI token‑usage dashboard
-* [ ] Optional on‑prem Llama 3 inference
-
----
-
-**Happy hacking 🚀**
-
+* [ ] Add support for additional data sources (Slack, Notion)
+* [ ] Implement memory functionality for the agent
+* [ ] Enable synchronization with external services
+* [ ] Add search functionality
+* [ ] Improve CLI user experience
