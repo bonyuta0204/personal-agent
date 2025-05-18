@@ -10,6 +10,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/bonyuta0204/personal-agent/go/internal/infrastructure/util"
+
 	"github.com/google/go-github/v58/github"
 	"golang.org/x/oauth2"
 
@@ -157,10 +159,13 @@ func (s *GitHubStorage) FetchDocument(storeId model.StoreId, path string) (*mode
 		return nil, err
 	}
 
+	sha := util.CalculateSHA256(content)
+
 	return &model.Document{
 		Path:       path,
 		StoreId:    storeId,
 		Content:    content,
+		SHA:        sha,
 		ModifiedAt: modTime,
 	}, nil
 }
@@ -181,12 +186,15 @@ func (s *GitHubStorage) FetchMemory(path string) (*model.Memory, error) {
 		return nil, err
 	}
 
+	sha := util.CalculateSHA256(content)
+
 	// Strip the .memories/ prefix and .md suffix for the memory path
 	memoryPath := strings.TrimSuffix(strings.TrimPrefix(path, ".memories/"), ".md")
 
 	return &model.Memory{
 		Path:      memoryPath,
 		Content:   content,
+		SHA:       sha,
 		CreatedAt: modTime,
 		UpdatedAt: modTime,
 	}, nil

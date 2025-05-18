@@ -12,6 +12,7 @@ type Document struct {
 	Content   string
 	Embedding []float64
 	Tags      []string
+	SHA       string
 
 	ModifiedAt time.Time // The time when the document was last modified. This is used to detect changes in the document.
 	CreatedAt  time.Time

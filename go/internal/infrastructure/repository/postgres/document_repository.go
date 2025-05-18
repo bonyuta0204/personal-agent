@@ -75,20 +75,22 @@ func (r *documentRepository) SaveDocument(document *model.Document) error {
 			    embedding = $2, 
 			    tags = $3,
 			    modified_at = $4,
+			    sha = $5,
 			    updated_at = NOW()
-			WHERE store_id = $5 AND path = $6`,
+			WHERE store_id = $6 AND path = $7`,
 			document.Content,
 			embedding,
 			tagsJSON,
 			document.ModifiedAt,
+			document.SHA,
 			document.StoreId,
 			document.Path,
 		)
 	} else {
 		// Insert new document
 		_, err = tx.ExecContext(ctx, `
-			INSERT INTO documents (store_id, path, content, embedding, tags, modified_at)
-			VALUES ($1, $2, $3, $4, $5, $6)
+			INSERT INTO documents (store_id, path, content, embedding, tags, modified_at, sha)
+			VALUES ($1, $2, $3, $4, $5, $6, $7)
 		`,
 			document.StoreId,
 			document.Path,
@@ -96,6 +98,7 @@ func (r *documentRepository) SaveDocument(document *model.Document) error {
 			embedding,
 			tagsJSON,
 			document.ModifiedAt,
+			document.SHA,
 		)
 	}
 

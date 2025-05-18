@@ -11,6 +11,7 @@ type Memory struct {
 	Content   string
 	Embedding []float64
 	Tags      []string
+	SHA       string
 
 	ModifiedAt time.Time
 	CreatedAt  time.Time
