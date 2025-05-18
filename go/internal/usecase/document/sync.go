@@ -5,6 +5,7 @@ import (
 	"log"
 
 	"github.com/bonyuta0204/personal-agent/go/internal/domain/model"
+	"github.com/bonyuta0204/personal-agent/go/internal/domain/port/embedding"
 	"github.com/bonyuta0204/personal-agent/go/internal/domain/port/repository"
 	"github.com/bonyuta0204/personal-agent/go/internal/domain/port/storage"
 )
@@ -13,10 +14,11 @@ type SyncUsecase struct {
 	storeRepo              repository.StoreRepository
 	documentRepo           repository.DocumentRepository
 	storageFactoryProvider storage.StorageFactoryProvider
+	embeddingProvider      embedding.EmbeddingProvider
 }
 
 // NewSyncUsecase creates a new SyncUsecase instance
-func NewSyncUsecase(storeRepo repository.StoreRepository, documentRepo repository.DocumentRepository, factoryProvider storage.StorageFactoryProvider) *SyncUsecase {
+func NewSyncUsecase(storeRepo repository.StoreRepository, documentRepo repository.DocumentRepository, factoryProvider storage.StorageFactoryProvider, embeddingProvider embedding.EmbeddingProvider) *SyncUsecase {
 	return &SyncUsecase{
 		storeRepo:              storeRepo,
 		documentRepo:           documentRepo,
@@ -86,15 +88,20 @@ func (u *SyncUsecase) Sync(storeId string) error {
 			continue
 		}
 
-		if !existingSHASet[doc.SHA] {
-			//			log.Printf("saving changed document: %s", doc.Path)
+		if !existingSHASet[doc.SHA] || doc.Embedding == nil {
+			// create embedding
+			embedding, err := u.embeddingProvider.Embed(doc.Content)
+			if err != nil {
+				log.Printf("failed to create embedding for document %s: %v", doc.Path, err)
+				continue
+			}
+			doc.Embedding = embedding
 			if err := u.documentRepo.SaveDocument(doc); err != nil {
 				log.Printf("failed to save document %s: %v", doc.Path, err)
 				continue
 			}
 			savedCount++
 		} else {
-			//log.Printf("document unchanged: %s", doc.Path)
 		}
 	}
 
