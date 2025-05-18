@@ -49,22 +49,56 @@ func (u *SyncUsecase) Sync(storeId string) error {
 		return fmt.Errorf("failed to create storage: %w", err)
 	}
 
+	// Get all document entries from storage
 	entries, err := storage.GetDocumentEntries()
 	if err != nil {
-		return fmt.Errorf("failed to get all paths: %w", err)
+		return fmt.Errorf("failed to get document entries: %w", err)
 	}
 
-	for _, entry := range entries {
+	// Fetch all documents from storage
+	var documents = make([]*model.Document, len(entries))
+
+	for i, entry := range entries {
 		document, err := storage.FetchDocument(store.ID(), entry.Path)
 		if err != nil {
-			log.Printf("failed to fetch document: %s", err)
+			log.Printf("failed to fetch document %s: %v", entry.Path, err)
+			continue
 		}
-
-		if err := u.documentRepo.SaveDocument(document); err != nil {
-			log.Printf("failed to save document: %s", err)
-		}
-
+		documents[i] = document
 	}
+
+	// Find unchanged documents
+	existingSHAs, err := u.documentRepo.FindExistingSHAs(documents)
+	if err != nil {
+		return fmt.Errorf("failed to find unchanged documents: %w", err)
+	}
+
+	// Create a map for quick lookup of unchanged document IDs
+	existingSHASet := make(map[string]bool, len(existingSHAs))
+	for _, sha := range existingSHAs {
+		existingSHASet[sha] = true
+	}
+
+	// Save only changed documents
+	savedCount := 0
+	for _, doc := range documents {
+		if doc == nil {
+			continue
+		}
+
+		if !existingSHASet[doc.SHA] {
+			//			log.Printf("saving changed document: %s", doc.Path)
+			if err := u.documentRepo.SaveDocument(doc); err != nil {
+				log.Printf("failed to save document %s: %v", doc.Path, err)
+				continue
+			}
+			savedCount++
+		} else {
+			//log.Printf("document unchanged: %s", doc.Path)
+		}
+	}
+
+	log.Printf("sync completed: %d documents processed, %d documents saved", len(documents), savedCount)
 
 	return nil
 }
