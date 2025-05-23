@@ -7,9 +7,9 @@ import {
   MessageRepository,
   MessageRole,
 } from "../domain/model/message.ts";
-import { ChatOpenAI } from "@langchain/openai";
-
-const model = new ChatOpenAI({ model: "gpt-4" });
+// Remove unnecessary import
+// import { ChatOpenAI } from "@langchain/openai";
+// const model = new ChatOpenAI({ model: "gpt-4" });
 
 export interface HandleUserMessageParams {
   sessionId: string;

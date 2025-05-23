@@ -2,7 +2,6 @@ import { ChatSession, ChatSessionRepository } from '../domain/model/chat_session
 import { Message, MessageRepository, MessageRole } from '../domain/model/message.ts';
 
 export interface StartSessionParams {
-  userId: string;
   title?: string;
   initialSystemMessage?: string;
 }
@@ -16,7 +15,7 @@ export class StartSessionUseCase {
   async execute(params: StartSessionParams): Promise<ChatSession> {
     // Create a new chat session
     const session = await this.sessionRepo.create({
-      userId: params.userId,
+      userId: 'cli-user', // Use a default user ID for CLI
       title: params.title || 'New Conversation',
       createdAt: new Date(),
       updatedAt: new Date(),

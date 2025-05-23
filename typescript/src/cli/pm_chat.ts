@@ -11,10 +11,9 @@ import { GenerateReplyUseCase } from "../usecase/generate_reply.ts";
 
 // Parse command line arguments
 const args = parse(Deno.args, {
-  string: ["user", "session"],
+  string: ["session"],
   boolean: ["help"],
   alias: {
-    u: "user",
     s: "session",
     h: "help",
   },
@@ -27,7 +26,6 @@ if (args.help) {
     "Usage: deno run --allow-env --allow-net src/cli/pm_chat.ts [options]"
   );
   console.log("Options:");
-  console.log("  -u, --user    User ID (required if no session specified)");
   console.log(
     "  -s, --session Session ID (optional, will create new session if not provided)"
   );
@@ -63,18 +61,11 @@ const generateReplyUseCase = new GenerateReplyUseCase(
 // Main function
 async function main() {
   let sessionId = args.session;
-  const userId = args.user || "default-user";
 
   // Create a new session if none specified
   if (!sessionId) {
-    if (!userId) {
-      console.error("Error: User ID is required when creating a new session");
-      Deno.exit(1);
-    }
-
     console.log("Creating new chat session...");
     const session = await startSessionUseCase.execute({
-      userId,
       title: "CLI Chat Session",
       initialSystemMessage:
         "You are a helpful personal agent. Answer questions concisely and accurately.",

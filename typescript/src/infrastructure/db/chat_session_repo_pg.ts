@@ -37,9 +37,6 @@ export class PgChatSessionRepository implements ChatSessionRepository {
     // Placeholder implementation
   }
 
-  async listByUserId(userId: string): Promise<ChatSession[]> {
-    // Implementation would query the database
-    // Placeholder implementation
-    return [];
-  }
+  // Removed listByUserId method as it's not needed for CLI application
+  // This method was removed from the interface
 }

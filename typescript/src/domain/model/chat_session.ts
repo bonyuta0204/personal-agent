@@ -15,5 +15,6 @@ export interface ChatSessionRepository {
   findById(id: string): Promise<ChatSession | null>;
   update(session: ChatSession): Promise<ChatSession>;
   delete(id: string): Promise<void>;
-  listByUserId(userId: string): Promise<ChatSession[]>;
+  // Removed listByUserId as it's not needed for CLI application
+  // But we'll keep the userId field in ChatSession for backward compatibility
 }
