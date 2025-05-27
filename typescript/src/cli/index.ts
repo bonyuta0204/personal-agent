@@ -2,17 +2,14 @@
 
 import { Input } from "@cliffy/prompt";
 
-import { DatabaseClient } from "../infra/pg/client.ts";
 import { PersonalAgent, createPersonalAgent } from "../agent/Agent.ts";
+import { loadConfig } from "../config/index.ts";
 
 class PersonalAgentCLI {
-  private agent?: PersonalAgent;
-  private db?: DatabaseClient;
+  private agent: PersonalAgent;
 
-  constructor() {
-    // constructor(db: DatabaseClient) {
-    this.agent = createPersonalAgent();
-    // this.db = db;
+  constructor(agent: PersonalAgent) {
+    this.agent = agent;
   }
 
   async start(): Promise<void> {
@@ -24,8 +21,6 @@ class PersonalAgentCLI {
     } catch (error) {
       console.error("❌ Failed to start:", error);
       Deno.exit(1);
-    } finally {
-      await this.cleanup();
     }
   }
 
@@ -75,7 +70,6 @@ class PersonalAgentCLI {
       );
 
       console.log("\n🤖 Agent:");
-      console.debug(result);
       console.log(result.messages[result.messages.length - 1].content);
     } catch (error) {
       console.error("❌ Error:", error);
@@ -83,14 +77,10 @@ class PersonalAgentCLI {
 
     console.log(); // Add spacing
   }
-
-  private async cleanup(): Promise<void> {
-    if (this.db) {
-      await this.db.disconnect();
-    }
-  }
 }
 
 // Main entry point
-const cli = new PersonalAgentCLI();
+const config = await loadConfig();
+const personalAgent = await createPersonalAgent(config);
+const cli = new PersonalAgentCLI(personalAgent);
 await cli.start();

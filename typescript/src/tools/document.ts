@@ -1,7 +1,12 @@
-import { tool } from "@langchain/core/tools";
 import { z } from "zod";
+import {
+  PGVectorStore,
+  DistanceStrategy,
+} from "@langchain/community/vectorstores/pgvector";
+import { OpenAIEmbeddings } from "@langchain/openai";
+import { PoolConfig } from "pg";
 
-import { DatabaseClient } from "../infra/pg/client.ts";
+import { Config } from "../config/index.ts";
 
 const documentSearchSchema = z.object({
   query: z.string().describe("The query to search for."),
@@ -9,19 +14,41 @@ const documentSearchSchema = z.object({
 
 type DocumentSearchInput = z.infer<typeof documentSearchSchema>;
 
-export function createDocumentSemanticTool(db: DatabaseClient) {
-  return tool(
-    async ({ query }: DocumentSearchInput) => {
-      const results = await db.queryRow<{ id: string; content: string }>(
-        "SELECT id, content FROM documents WHERE content @@ to_tsquery($1) LIMIT 1",
-        [query]
-      );
-      return results?.content || "No matching document found";
+export async function createDocumentSemanticTool(config: Config) {
+  const vectorStoreConifg = {
+    postgresConnectionOptions: {
+      type: "postgres",
+      host: config.database.host,
+      port: config.database.port,
+      user: config.database.username,
+      password: config.database.password,
+      database: config.database.database,
+    } as PoolConfig,
+    tableName: "documents",
+    columns: {
+      idColumnName: "id",
+      vectorColumnName: "embedding",
+      contentColumnName: "content",
     },
-    {
-      name: "document_search",
-      description: "Search for a document by its content.",
-      schema: documentSearchSchema,
-    }
+    distanceStrategy: "cosine" as DistanceStrategy,
+  };
+
+  const embeddings = new OpenAIEmbeddings({
+    model: config.openai.embeddingModel,
+  });
+
+  const vectorStore = await PGVectorStore.initialize(
+    embeddings,
+    vectorStoreConifg
   );
+  const retriever = vectorStore.asRetriever({
+    k: 1,
+    searchType: "similarity",
+  });
+
+  return retriever.asTool({
+    name: "document_semantic_search",
+    description: "Search for a document by its content.",
+    schema: z.string(),
+  });
 }

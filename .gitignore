@@ -1,2 +1,4 @@
 go/.env
 go/bin
+typescript/.env
+typescript/node_modules

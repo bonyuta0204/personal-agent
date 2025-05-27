@@ -1,5 +1,3 @@
-import { load } from "dotenv";
-
 export interface Config {
   database: {
     host: string;
@@ -16,9 +14,7 @@ export interface Config {
   };
 }
 
-export async function loadConfig(): Promise<Config> {
-  await load({ export: true });
-
+export function loadConfig(): Config {
   return {
     database: {
       host: Deno.env.get("DB_HOST") || "localhost",
