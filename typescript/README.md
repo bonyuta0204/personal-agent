@@ -31,9 +31,9 @@ src/
 ## Setup
 
 1. **Environment Configuration**:
-   
+
    Set the following environment variables (e.g., in a `.env` file or your shell):
-   
+
    - `DB_HOST` (default: localhost)
    - `DB_PORT` (default: 5432)
    - `DB_NAME` (default: personal_agent)
@@ -121,5 +121,6 @@ deno task check    # Type check
 ## Integration with Go Module
 
 This TypeScript module is designed to work alongside the Go CLI:
+
 - **Shared Database**: Uses the same PostgreSQL schema as the Go collector/sync
 - **Complementary**: Go handles data collection/sync, TypeScript provides chat & AI

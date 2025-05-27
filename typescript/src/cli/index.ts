@@ -2,8 +2,9 @@
 
 import { Input } from "@cliffy/prompt";
 
-import { PersonalAgent, createPersonalAgent } from "../agent/Agent.ts";
+import { createPersonalAgent, PersonalAgent } from "../agent/Agent.ts";
 import { loadConfig } from "../config/index.ts";
+import { Pool } from "pg";
 
 class PersonalAgentCLI {
   private agent: PersonalAgent;
@@ -66,7 +67,7 @@ class PersonalAgentCLI {
             },
           ],
         },
-        { configurable: { thread_id: "personal_agent" } }
+        { configurable: { thread_id: "personal_agent" } },
       );
 
       console.log("\n🤖 Agent:");
@@ -81,6 +82,14 @@ class PersonalAgentCLI {
 
 // Main entry point
 const config = await loadConfig();
-const personalAgent = await createPersonalAgent(config);
+const pool = new Pool({
+  host: config.database.host,
+  port: config.database.port,
+  user: config.database.username,
+  password: config.database.password,
+  database: config.database.database,
+  ssl: config.database.ssl,
+});
+const personalAgent = await createPersonalAgent(config, pool);
 const cli = new PersonalAgentCLI(personalAgent);
 await cli.start();

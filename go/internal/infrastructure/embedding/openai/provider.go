@@ -3,6 +3,7 @@ package openai
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 
 	"github.com/bonyuta0204/personal-agent/go/internal/domain/port/embedding"
@@ -32,6 +33,13 @@ func NewProvider() (*Provider, error) {
 // Embed implements the embedding.EmbeddingProvider interface
 // It creates an embedding for the given text using OpenAI's API
 func (p *Provider) Embed(text string) ([]float64, error) {
+	// OpenAI embedding API max: 300,000 tokens (see https://platform.openai.com/docs/guides/embeddings/what-are-embeddings)
+	// Roughly estimate: 1 token ≈ 4 chars (so 120,000 chars ≈ 300,000 tokens)
+	const maxChars = 120000
+	if len([]rune(text)) > maxChars {
+		return nil, fmt.Errorf("text too long for embedding: %d chars (max %d chars, ~300k tokens)", len([]rune(text)), maxChars)
+	}
+
 	req := openai.EmbeddingRequest{
 		Input: []string{text},
 		Model: p.model,
