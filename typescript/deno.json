@@ -1,0 +1,43 @@
+{
+  "name": "@personal-agent/typescript",
+  "version": "0.1.0",
+  "tasks": {
+    "dev": "deno run --watch --allow-all src/cli/index.ts",
+    "start": "deno run --allow-all src/cli/index.ts",
+    "test": "deno test --allow-all",
+    "check": "deno check **/*.ts",
+    "fmt": "deno fmt",
+    "lint": "deno lint"
+  },
+  "exports": "./src/cli/index.ts",
+  "imports": {
+    "@cliffy/command": "jsr:@cliffy/command@^1.0.0-rc.7",
+    "@cliffy/prompt": "jsr:@cliffy/prompt@^1.0.0-rc.7",
+    "@langchain/core": "npm:@langchain/core@^0.3.57",
+    "@langchain/langgraph": "npm:@langchain/langgraph@^0.2.73",
+    "@langchain/openai": "npm:@langchain/openai@^0.5.11",
+    "langchain": "npm:langchain@^0.3.27",
+    "postgres": "https://deno.land/x/postgres@v0.17.2/mod.ts",
+    "dotenv": "https://deno.land/std@0.208.0/dotenv/mod.ts",
+    "zod": "npm:zod@^3.25.23"
+  },
+  "compilerOptions": {
+    "strict": true,
+    "noImplicitAny": true,
+    "noImplicitReturns": true,
+    "exactOptionalPropertyTypes": false
+  },
+  "fmt": {
+    "useTabs": false,
+    "lineWidth": 100,
+    "indentWidth": 2,
+    "semiColons": true,
+    "singleQuote": false,
+    "proseWrap": "preserve"
+  },
+  "lint": {
+    "rules": {
+      "tags": ["recommended"]
+    }
+  }
+}
