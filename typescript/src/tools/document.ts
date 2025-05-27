@@ -1,8 +1,5 @@
 import { z } from "zod";
-import {
-  PGVectorStore,
-  DistanceStrategy,
-} from "@langchain/community/vectorstores/pgvector";
+import { DistanceStrategy, PGVectorStore } from "@langchain/community/vectorstores/pgvector";
 import { OpenAIEmbeddings } from "@langchain/openai";
 import { PoolConfig } from "pg";
 
@@ -33,16 +30,85 @@ export async function createDocumentSemanticTool(config: Config) {
 
   const vectorStore = await PGVectorStore.initialize(
     embeddings,
-    vectorStoreConifg
+    vectorStoreConifg,
   );
-  const retriever = vectorStore.asRetriever({
-    k: 5,
-    searchType: "similarity",
-  });
+  return tool(
+    async (input: { query: string; k?: number }) => {
+      const retriever = vectorStore.asRetriever({
+        k: input.k ?? 5,
+        searchType: "similarity",
+      });
 
-  return retriever.asTool({
-    name: "document_semantic_search",
-    description: "Search for a document by its content.",
-    schema: z.string(),
-  });
+      const results = await retriever.invoke(input.query);
+      return JSON.stringify(results, null, 2);
+    },
+    {
+      name: "document_semantic_search",
+      description: "Search for a document by its content. Input: { query: string, k?: number }.",
+      schema: z.object({ query: z.string(), k: z.number().optional() }),
+    },
+  );
+}
+
+// タグによる検索ツール
+import { Pool } from "pg";
+import { tool } from "@langchain/core/tools";
+
+export async function createDocumentTagSearchTool(pool: Pool) {
+  // fetch all unique tags
+  const client = await pool.connect();
+  let tags: string[] = [];
+  try {
+    const res = await client.query(
+      "SELECT DISTINCT jsonb_array_elements_text(tags) AS tag FROM documents WHERE jsonb_typeof(tags) = 'array';",
+    );
+    tags = res.rows.map((row: { tag: string }) => row.tag).sort();
+  } finally {
+    client.release();
+  }
+  const tagList = tags.length > 0 ? `\nExisting tags: [${tags.join(", ")}]` : "";
+  return tool(
+    async (input: { tags: string[]; k?: number }) => {
+      const client = await pool.connect();
+      try {
+        const res = await client.query(
+          `SELECT id, path, content, tags FROM documents WHERE tags @> $1::jsonb LIMIT $2`,
+          [JSON.stringify(input.tags), input.k ?? 5],
+        );
+        return JSON.stringify(res.rows, null, 2);
+      } finally {
+        client.release();
+      }
+    },
+    {
+      name: "document_tag_search",
+      description: `Search documents by tags. Input: { tags: string[], k?: number }.${tagList}`,
+      schema: z.object({ tags: z.array(z.string()), k: z.number().optional() }),
+    },
+  );
+}
+
+// キーワードによる検索ツール
+export function createDocumentKeywordSearchTool(pool: Pool) {
+  return tool(
+    async (input: { keyword: string; k?: number }) => {
+      const client = await pool.connect();
+      try {
+        const keyword = `%${input.keyword}%`;
+        const res = await client.query(
+          `SELECT id, path, content, tags FROM documents WHERE content ILIKE $1 LIMIT $2`,
+          [keyword, input.k ?? 5],
+        );
+        return JSON.stringify(res.rows, null, 2);
+      } finally {
+        client.release();
+      }
+    },
+    {
+      name: "document_keyword_search",
+      description:
+        "Search documents by keyword in content. Input: { keyword: string, k?: number }.",
+      schema: z.object({ keyword: z.string(), k: z.number().optional() }),
+    },
+  );
 }

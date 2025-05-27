@@ -68,6 +68,8 @@ func (u *SyncUsecase) Sync(storeId string) error {
 			continue
 		}
 		if document != nil {
+			// set document tags from content
+			document.SetTagsFromContent()
 			documents = append(documents, document)
 		}
 	}

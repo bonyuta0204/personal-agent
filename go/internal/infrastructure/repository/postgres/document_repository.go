@@ -42,8 +42,12 @@ func (r *documentRepository) SaveDocument(document *model.Document) error {
 	}
 	defer tx.Rollback()
 
-	// Convert tags to JSONB
-	tagsJSON, err := json.Marshal(document.Tags)
+	// Convert tags to JSONB (always as array, never null)
+	tags := document.Tags
+	if tags == nil {
+		tags = []string{}
+	}
+	tagsJSON, err := json.Marshal(tags)
 	if err != nil {
 		return err
 	}
