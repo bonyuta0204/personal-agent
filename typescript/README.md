@@ -1,151 +1,125 @@
-# Personal Agent - TypeScript Module
+# Personal Agent – TypeScript Module
 
-TypeScript implementation of the Personal Agent using Deno, LangChain, and PostgreSQL with pgvector.
+This module implements the AI agent for the Personal Agent project using Deno, LangChain, and PostgreSQL with pgvector. It provides a CLI interface for natural language chat and semantic document search.
 
 ## Features
 
-- **Vector Search**: Semantic search across documents and memories using OpenAI embeddings
-- **LangChain Integration**: AI-powered query answering with retrieval-augmented generation (RAG)
-- **PostgreSQL + pgvector**: High-performance vector database for embeddings
-- **CLI Interface**: Command-line tool for querying and managing knowledge base
-- **Deno Runtime**: Modern TypeScript runtime with built-in security and performance
+- **AI Chat Agent**: Answers questions using retrieval-augmented generation (RAG) via LangChain
+- **Semantic Document Search**: Uses OpenAI embeddings and pgvector for similarity search over documents
+- **CLI Interface**: Interactive command-line chat with the agent
+- **Configurable**: Reads DB and OpenAI settings from environment variables
+- **Deno Runtime**: Secure, modern TypeScript runtime
 
 ## Architecture
 
-### Directory Structure
-
 ```
 src/
-├── agent/           # AI agent implementation using LangChain
-├── cli/             # Command-line interface
-├── config/          # Configuration management
-├── infra/pg/        # PostgreSQL infrastructure layer
-├── tools/           # Retriever interfaces and tools
-└── types/           # TypeScript type definitions
-
-test/
-└── infra/           # Infrastructure tests
+├── agent/      # AI agent logic (LangChain, tools)
+├── cli/        # CLI entrypoint and loop
+├── config/     # Loads config from env
+├── tools/      # Document search tool (pgvector)
+└── types/      # Type definitions
 ```
 
 ### Key Components
 
-- **Agent**: LangChain-powered AI agent for question answering
-- **Retrievers**: Generic interfaces for vector search operations
-- **PgRetriever**: PostgreSQL implementation with multiple search methods
-- **DatabaseClient**: PostgreSQL client with connection management
+- **Agent**: LangChain-based agent with a semantic document search tool
+- **CLI**: Text-based interface for chatting with the agent
+- **Config**: Loads DB and OpenAI credentials from environment variables
+- **Document Tool**: Connects to PostgreSQL/pgvector for semantic search
 
 ## Setup
 
 1. **Environment Configuration**:
-   ```bash
-   cp .env.example .env
-   # Edit .env with your database and OpenAI credentials
-   ```
+   
+   Set the following environment variables (e.g., in a `.env` file or your shell):
+   
+   - `DB_HOST` (default: localhost)
+   - `DB_PORT` (default: 5432)
+   - `DB_NAME` (default: personal_agent)
+   - `DB_USER` (default: postgres)
+   - `DB_PASSWORD`
+   - `DB_SSL` ("true" or "false")
+   - `OPENAI_API_KEY` (required)
+   - `OPENAI_MODEL` (default: gpt-4.1-mini)
+   - `OPENAI_EMBEDDING_MODEL` (default: text-embedding-3-small)
 
 2. **Database Setup**:
-   - Ensure PostgreSQL is running with pgvector extension
-   - Run migrations from the Go module to set up schema
+   - Ensure PostgreSQL is running with the `pgvector` extension enabled
+   - Run database migrations (see Go module for schema)
 
 3. **Dependencies**:
-   All dependencies are managed through Deno's import maps in `deno.json`
+   - Managed via Deno import maps (`deno.json`)
 
 ## Usage
 
-Simply run the command to start chatting:
+Start the interactive CLI:
 
 ```bash
 deno task start
 ```
 
-This starts an interactive chat session where you can:
-- Ask questions naturally
-- Search for documents and memories  
-- Store new memories
-- Get AI-powered answers with context
+You’ll see:
 
-**Example Session:**
-```bash
-$ deno task start
+```
 🤖 Personal Agent
 Type your questions naturally. Type 'exit' to quit.
+```
 
-✅ Ready to chat!
+Type any question or request. The agent will use semantic search over your documents and answer using retrieval-augmented generation.
 
-You: Find documents about machine learning
+**Example session:**
+
+```
+You: Find documents about vector search
 🤔 ...
 
-🤖 Agent: I found 5 documents about machine learning. Here are the key insights:
-[AI searches and provides comprehensive answer]
-
-📚 Sources:
-  📄 5 documents
-
-You: Can you save a summary of the main points?
-🤔 ...
-
-🤖 Agent: I've saved a summary with the key machine learning concepts to memory.
-[AI automatically stores the summary]
+🤖 Agent:
+I found 3 documents related to vector search. Here are the highlights:
+- ...
 
 You: exit
 👋 Goodbye!
 ```
 
-### Natural Language Interface
+## Configuration
 
-The agent understands natural language and automatically:
+The agent loads configuration from environment variables. See `src/config/index.ts` for details. Example:
 
-1. **Analyzes Intent**: Understands what you want to do
-2. **Selects Tools**: Chooses search, memory, or other tools
-3. **Executes Actions**: Runs the appropriate operations  
-4. **Provides Answers**: Gives comprehensive, contextual responses
-5. **Learns**: Saves important interactions to memory
-
-You can ask things like:
-- "Find documents about X"
-- "Remember that Y is important"
-- "What did we discuss about Z?"
-- "Search my memories for X"
-- "Save this information: ..."
-
-### Development Commands
-
-```bash
-# Run in development mode with file watching
-deno task dev
-
-# Run tests
-deno task test
-
-# Format code
-deno task fmt
-
-# Lint code
-deno task lint
-
-# Type check
-deno task check
+```env
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=personal_agent
+DB_USER=postgres
+DB_PASSWORD=yourpassword
+DB_SSL=false
+OPENAI_API_KEY=sk-...
+OPENAI_MODEL=gpt-4.1-mini
+OPENAI_EMBEDDING_MODEL=text-embedding-3-small
 ```
 
-## Database Schema
+## How It Works
 
-The TypeScript module uses the same PostgreSQL schema as the Go module:
+- The CLI launches an interactive loop (`src/cli/index.ts`)
+- User input is sent to the agent (`src/agent/Agent.ts`)
+- The agent uses LangChain and a semantic document search tool (`src/tools/document.ts`) to answer
+- Results are retrieved from PostgreSQL with pgvector, using OpenAI embeddings
+- The agent responds in natural language, optionally citing sources
 
-### documents
+## Development
 
-- Vector search with store filtering
-- JSONB tags for flexible metadata
-- SHA-based change detection
+```bash
+deno task dev      # Watch mode
 
-### memories
-
-- Global vector search across all memories
-- JSONB tags for categorization
-- Independent of stores
+# Other tasks:
+deno task test     # Run tests
+deno task fmt      # Format code
+deno task lint     # Lint code
+deno task check    # Type check
+```
 
 ## Integration with Go Module
 
 This TypeScript module is designed to work alongside the Go CLI:
-
-- **Shared Database**: Both modules use the same PostgreSQL schema
-- **Compatible Types**: TypeScript types mirror Go domain models
-- **Complementary Tools**: Go handles synchronization, TypeScript provides AI capabilities
+- **Shared Database**: Uses the same PostgreSQL schema as the Go collector/sync
+- **Complementary**: Go handles data collection/sync, TypeScript provides chat & AI
