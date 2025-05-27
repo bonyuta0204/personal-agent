@@ -8,12 +8,6 @@ import { PoolConfig } from "pg";
 
 import { Config } from "../config/index.ts";
 
-const documentSearchSchema = z.object({
-  query: z.string().describe("The query to search for."),
-});
-
-type DocumentSearchInput = z.infer<typeof documentSearchSchema>;
-
 export async function createDocumentSemanticTool(config: Config) {
   const vectorStoreConifg = {
     postgresConnectionOptions: {
@@ -42,7 +36,7 @@ export async function createDocumentSemanticTool(config: Config) {
     vectorStoreConifg
   );
   const retriever = vectorStore.asRetriever({
-    k: 1,
+    k: 5,
     searchType: "similarity",
   });
 

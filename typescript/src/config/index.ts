@@ -26,7 +26,7 @@ export function loadConfig(): Config {
     },
     openai: {
       openaiApiKey: Deno.env.get("OPENAI_API_KEY") || "",
-      model: Deno.env.get("OPENAI_MODEL") || "gpt-4.1-nano",
+      model: Deno.env.get("OPENAI_MODEL") || "gpt-4.1-mini",
       embeddingModel:
         Deno.env.get("OPENAI_EMBEDDING_MODEL") || "text-embedding-3-small",
     },
