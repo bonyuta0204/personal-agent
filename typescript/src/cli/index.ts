@@ -1,6 +1,6 @@
 #!/usr/bin/env -S deno run --allow-all
 
-import { Input } from "@cliffy/prompt";
+import { readLines } from "https://deno.land/std@0.208.0/io/mod.ts";
 
 import { createPersonalAgent, PersonalAgent } from "../agent/Agent.ts";
 import { loadConfig } from "../config/index.ts";
@@ -15,7 +15,8 @@ class PersonalAgentCLI {
 
   async start(): Promise<void> {
     console.log("🤖 Personal Agent");
-    console.log("Type your questions naturally. Type 'exit' to quit.\n");
+    console.log("Type your questions naturally.");
+    console.log("Exit: Type 'exit' or '終了', or press Ctrl+C\n");
 
     try {
       await this.conversationLoop();
@@ -26,13 +27,31 @@ class PersonalAgentCLI {
   }
 
   private async conversationLoop(): Promise<void> {
+    // Set up signal handlers for graceful shutdown
+    const handleInterrupt = () => {
+      console.log("\n\n👋 Goodbye!");
+      Deno.exit(0);
+    };
+
+    Deno.addSignalListener("SIGINT", handleInterrupt);
+    Deno.addSignalListener("SIGTERM", handleInterrupt);
+
+    const encoder = new TextEncoder();
+    const lineReader = readLines(Deno.stdin);
+
     while (true) {
       try {
-        const input = await Input.prompt({
-          message: "You:",
-          minLength: 1,
-        });
+        // Display prompt
+        await Deno.stdout.write(encoder.encode("You: "));
 
+        // Read user input
+        const result = await lineReader.next();
+        if (result.done) {
+          console.log("\n👋 Goodbye!");
+          break;
+        }
+
+        const input = result.value;
         const trimmedInput = input.trim();
 
         if (this.isExitCommand(trimmedInput)) {
@@ -40,11 +59,25 @@ class PersonalAgentCLI {
           break;
         }
 
-        await this.processInput(trimmedInput);
+        if (trimmedInput.length > 0) {
+          await this.processInput(trimmedInput);
+        }
       } catch (error) {
+        // Check if the error is due to EOF/Ctrl+D
+        if (
+          error instanceof Error &&
+          (error.message.includes("EOF") || error.message.includes("Bad resource ID"))
+        ) {
+          console.log("\n👋 Goodbye!");
+          break;
+        }
         console.error("❌ Error:", error);
       }
     }
+
+    // Clean up signal listeners
+    Deno.removeSignalListener("SIGINT", handleInterrupt);
+    Deno.removeSignalListener("SIGTERM", handleInterrupt);
   }
 
   private isExitCommand(input: string): boolean {
@@ -71,7 +104,20 @@ class PersonalAgentCLI {
       );
 
       console.log("\n🤖 Agent:");
-      console.log(result.messages[result.messages.length - 1].content);
+      const lastMessage = result.messages[result.messages.length - 1];
+      const content = lastMessage.content;
+
+      // Ensure proper UTF-8 output
+      if (typeof content === "string") {
+        // Force UTF-8 encoding for console output
+        const encoder = new TextEncoder();
+        const decoder = new TextDecoder("utf-8");
+        const encoded = encoder.encode(content);
+        const decoded = decoder.decode(encoded);
+        console.log(decoded);
+      } else {
+        console.log(content);
+      }
     } catch (error) {
       console.error("❌ Error:", error);
     }
