@@ -1,4 +1,6 @@
-# Personal Agent - Project Analysis
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Common Commands
 
@@ -21,8 +23,15 @@ go mod tidy            # Clean up dependencies
 go build -o bin/personal-agent -v ./cmd/cli
 ```
 
-### TypeScript Commands
-No TypeScript build commands found - the `typescript/` directory exists but appears empty.
+### TypeScript Commands (from `/typescript` directory)
+```bash
+deno task start        # Run the AI chat CLI
+deno task dev         # Run in watch mode
+deno task test        # Run tests
+deno task fmt         # Format code
+deno task lint        # Lint code
+deno task check       # Type check
+```
 
 ### Docker Commands
 ```bash
@@ -98,12 +107,11 @@ This project follows Clean Architecture with Domain-Driven Design (DDD) principl
 - **AI/ML**: OpenAI API for embeddings
 - **Configuration**: godotenv for environment management
 
-#### Dependencies
-- `github.com/google/go-github/v58`: GitHub API client
-- `github.com/jmoiron/sqlx`: SQL toolkit
-- `github.com/sashabaranov/go-openai`: OpenAI API client
-- `github.com/spf13/cobra`: CLI framework
-- `github.com/lib/pq`: PostgreSQL driver
+#### Frontend/AI (TypeScript/Deno)
+- **Runtime**: Deno for secure TypeScript execution
+- **AI Framework**: LangChain for agent orchestration
+- **Chat Interface**: CLI-based interactive chat
+- **Database Access**: Direct PostgreSQL connection for semantic search
 
 ### Key Conventions
 
@@ -127,6 +135,15 @@ This project follows Clean Architecture with Domain-Driven Design (DDD) principl
 - Interface-driven design for testability
 - Consistent naming conventions (e.g., `Repository`, `Provider`, `Factory`)
 
+### Development Workflow
+
+1. **Database Setup**: Use `docker-compose up -d` to start PostgreSQL with pgvector
+2. **Environment Configuration**: Copy `.env.sample` to `.env` and configure credentials
+3. **Build Go CLI**: Run `make build` in the `go/` directory
+4. **Create Store**: `./bin/personal-agent store create owner/repo`
+5. **Sync Documents**: `./bin/personal-agent document sync <store-id>`
+6. **Run AI Agent**: Use `deno task start` in the `typescript/` directory for interactive chat
+
 ### Current Implementation Status
 
 #### Implemented Features
@@ -135,6 +152,7 @@ This project follows Clean Architecture with Domain-Driven Design (DDD) principl
 - CLI interface for store and document management
 - Change detection via SHA comparison
 - PostgreSQL persistence with pgvector
+- AI chat interface with RAG capabilities
 
 #### Architecture Highlights
 - **Extensible Storage**: Plugin-like architecture for different storage backends
