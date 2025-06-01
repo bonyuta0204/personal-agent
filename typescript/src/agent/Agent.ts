@@ -93,7 +93,7 @@ export type PersonalAgent = Awaited<ReturnType<typeof createPersonalAgent>>;
 
 export async function createPersonalAgent(config: Config, pool: Pool) {
   // Define the tools for the agent to use
-  const documentSemanticTool = await createDocumentSemanticTool(config);
+  const documentSemanticTool = await createDocumentSemanticTool(pool,config);
   const documentTagSearchTool = await createDocumentTagSearchTool(pool);
   const documentKeywordSearchTool = createDocumentKeywordSearchTool(pool);
   

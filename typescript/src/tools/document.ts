@@ -4,20 +4,14 @@ import {
   PGVectorStore,
 } from "@langchain/community/vectorstores/pgvector";
 import { OpenAIEmbeddings } from "@langchain/openai";
-import { PoolConfig } from "pg";
+import { Pool } from "pg";
+import { tool } from "@langchain/core/tools";
 
 import { Config } from "../config/index.ts";
 
-export async function createDocumentSemanticTool(config: Config) {
+export async function createDocumentSemanticTool(pool: Pool, config: Config) {
   const vectorStoreConifg = {
-    postgresConnectionOptions: {
-      type: "postgres",
-      host: config.database.host,
-      port: config.database.port,
-      user: config.database.username,
-      password: config.database.password,
-      database: config.database.database,
-    } as PoolConfig,
+    pool,
     tableName: "documents",
     columns: {
       idColumnName: "id",
@@ -54,9 +48,6 @@ export async function createDocumentSemanticTool(config: Config) {
   );
 }
 
-// タグによる検索ツール
-import { Pool } from "pg";
-import { tool } from "@langchain/core/tools";
 
 export async function createDocumentTagSearchTool(pool: Pool) {
   // fetch all unique tags

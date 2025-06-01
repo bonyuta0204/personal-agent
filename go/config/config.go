@@ -9,6 +9,13 @@ import (
 type Config struct {
 	// Database configuration
 	Database DatabaseConfig
+	Memory   MemoryConfig
+}
+
+// MemoryConfig holds all memory related configuration
+type MemoryConfig struct {
+	// GitHub repository URL
+	Repo string
 }
 
 // DatabaseConfig holds all database related configuration
@@ -29,6 +36,9 @@ func LoadConfig() (*Config, error) {
 			Name:     os.Getenv("DB_NAME"),
 			Host:     os.Getenv("DB_HOST"),
 			Port:     os.Getenv("DB_PORT"),
+		},
+		Memory: MemoryConfig{
+			Repo: os.Getenv("MEMORY_REPO"),
 		},
 	}
 
@@ -62,6 +72,11 @@ func validateConfig(config *Config) error {
 	}
 	if config.Database.Port == "" {
 		return fmt.Errorf("DB_PORT is required")
+	}
+
+	// Validate Memory configuration
+	if config.Memory.Repo == "" {
+		return fmt.Errorf("MEMORY_REPO is required")
 	}
 
 	return nil

@@ -31,6 +31,11 @@ type DocumentEntry struct {
 	ModifiedAt time.Time
 }
 
+type MemoryEntry struct {
+	Path       string
+	ModifiedAt time.Time
+}
+
 // set document tag from its content (Obsidian markdown style, including YAML frontmatter)
 func (d *Document) SetTagsFromContent() {
 	tagSet := make(map[string]struct{})

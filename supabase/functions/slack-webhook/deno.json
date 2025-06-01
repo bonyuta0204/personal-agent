@@ -1,0 +1,14 @@
+{
+  "imports": {
+    "@langchain/community": "npm:@langchain/community@^0.3.44",
+    "@langchain/core": "npm:@langchain/core@^0.3.57",
+    "@langchain/core/messages": "npm:@langchain/core@^0.3.57/messages",
+    "@langchain/core/tools": "npm:@langchain/core@^0.3.57/tools",
+    "@langchain/langgraph": "npm:@langchain/langgraph@^0.2.73",
+    "@langchain/langgraph/prebuilt": "npm:@langchain/langgraph@^0.2.73/prebuilt",
+    "@langchain/community/vectorstores/pgvector": "npm:@langchain/community@^0.3.44/vectorstores/pgvector",
+    "@langchain/openai": "npm:@langchain/openai@^0.5.11",
+    "zod": "npm:zod@^3.25.23",
+    "pg": "npm:pg@^8.16.0"
+  }
+}

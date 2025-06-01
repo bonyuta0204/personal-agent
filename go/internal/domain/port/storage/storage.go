@@ -10,6 +10,7 @@ type Storage interface {
 	FetchDocument(storeId model.StoreId, path string) (*model.Document, error)
 	FetchMemory(path string) (*model.Memory, error)
 	GetDocumentEntries() ([]model.DocumentEntry, error)
+	GetMemoryEntries() ([]model.MemoryEntry, error)
 }
 
 type StorageFactory interface {
@@ -17,4 +18,8 @@ type StorageFactory interface {
 }
 type StorageFactoryProvider interface {
 	GetFactory(storeType string) (StorageFactory, error)
+}
+
+type MemoryStorageFactory interface {
+	CreateMemoryStorage() (Storage, error)
 }
