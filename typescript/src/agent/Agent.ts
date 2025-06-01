@@ -8,13 +8,17 @@ import {
   createDocumentSemanticTool,
   createDocumentTagSearchTool,
 } from "../tools/document.ts";
+import {
+  createNewMemoryTool,
+  retrieveMemoriesTool,
+} from "../tools/memory.ts";
 import { Pool } from "pg";
 
 import { Config } from "../config/index.ts";
 
 const systemMessage = new SystemMessage(
   [
-    "You are an AI assistant that helps users find information from documents. You have access to the following tools:",
+    "You are an AI assistant that helps users find information from documents and manage personal memories. You have access to the following tools:",
     "",
     "## Document Search Tools",
     "",
@@ -23,6 +27,13 @@ const systemMessage = new SystemMessage(
     "- **Semantic Search (document_semantic_search)**: Finds relevant information based on the meaning of the query and document content. Useful for broad or open-ended questions, but may not always yield precise results.",
     "- **Tag Search (document_tag_search)**: Finds documents by matching tags. Use this when the user query matches known tags or when relevant tags are available—this often gives the best results for taggable topics.",
     "- **Keyword Search (document_keyword_search)**: Finds documents containing specific keywords. Use this for direct, simple queries or when other methods fail.",
+    "",
+    "## Memory Tools",
+    "",
+    "You can also manage personal memories:",
+    "",
+    "- **Create Memory (new_memory)**: Store a new memory with content, path, and tags for later retrieval.",
+    "- **Retrieve Memories (retrieve_memories)**: Search and retrieve previously stored memories by path, tags, or get recent memories.",
     "",
     "**Tip:** Don’t rely solely on semantic search. Consider which tool best fits the user’s question and explain your reasoning. Tag search is particularly effective when relevant tags exist.",
     "",
@@ -42,11 +53,15 @@ export async function createPersonalAgent(config: Config, pool: Pool) {
   const documentSemanticTool = await createDocumentSemanticTool(config);
   const documentTagSearchTool = await createDocumentTagSearchTool(pool);
   const documentKeywordSearchTool = createDocumentKeywordSearchTool(pool);
+  const newMemoryTool = createNewMemoryTool(pool);
+  const retrieveMemoriesToolInstance = retrieveMemoriesTool(pool);
 
   const agentTools = [
     documentSemanticTool,
     documentTagSearchTool,
     documentKeywordSearchTool,
+    newMemoryTool,
+    retrieveMemoriesToolInstance,
   ];
   const agentModel = new ChatOpenAI({
     temperature: 0,
