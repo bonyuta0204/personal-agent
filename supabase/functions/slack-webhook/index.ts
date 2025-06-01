@@ -2,8 +2,8 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createHmac } from "https://deno.land/std@0.168.0/node/crypto.ts";
 import { Pool } from "https://deno.land/x/postgres@v0.17.0/mod.ts";
 
-// Import existing agent code directly
-import { createPersonalAgent } from "../../../typescript/src/agent/Agent.ts";
+// Import simplified agent to avoid LangGraph issues
+import { createPersonalAgent } from "./Agent.ts";
 import { Config } from "../../../typescript/src/config/index.ts";
 
 // Slack signature verification
@@ -15,8 +15,12 @@ function verifySlackSignature(
 ): boolean {
   const baseString = `v0:${timestamp}:${body}`;
   const hmac = createHmac("sha256", secret);
+  console.log("[baseString]", baseString);
+  console.log("[signature]", signature);
+  console.log("[secret]", secret);
   hmac.update(baseString);
   const expectedSignature = `v0=${hmac.digest("hex")}`;
+  console.log("[expectedSignature]", expectedSignature);
   return expectedSignature === signature;
 }
 
@@ -47,23 +51,56 @@ function formatSlackResponse(agentResponse: string, sources?: any[]): any {
 }
 
 Deno.serve(async (req) => {
+  console.log("Request received:", req.method, req.url);
+  console.log("Headers:", Object.fromEntries(req.headers.entries()));
+  
   try {
     // Get Slack headers
     const signature = req.headers.get("X-Slack-Signature");
     const timestamp = req.headers.get("X-Slack-Request-Timestamp");
+    const contentType = req.headers.get("Content-Type");
     const body = await req.text();
 
+    // Log environment variables (without exposing secrets)
+    console.log("Environment check:");
+    console.log("- SLACK_SIGNING_SECRET exists:", !!Deno.env.get("SLACK_SIGNING_SECRET"));
+    console.log("- SLACK_BOT_TOKEN exists:", !!Deno.env.get("SLACK_BOT_TOKEN"));
+    
     // Verify Slack signature
     const slackSecret = Deno.env.get("SLACK_SIGNING_SECRET");
-    if (
-      !slackSecret || !signature || !timestamp ||
-      !verifySlackSignature(body, timestamp, signature, slackSecret)
-    ) {
+    console.log("Verification details:");
+    console.log("- Signature header:", signature);
+    console.log("- Timestamp header:", timestamp);
+    console.log("- Content-Type:", contentType);
+    console.log("- Body length:", body.length);
+    console.log("- Body preview:", body.substring(0, 100));
+    
+    if (!slackSecret) {
+      console.error("SLACK_SIGNING_SECRET is not set!");
+      return new Response("Server configuration error", { status: 500 });
+    }
+    
+    if (!signature || !timestamp) {
+      console.error("Missing required headers");
+      return new Response("Unauthorized", { status: 401 });
+    }
+    
+    if (!verifySlackSignature(body, timestamp, signature, slackSecret)) {
+      console.error("Signature verification failed");
       return new Response("Unauthorized", { status: 401 });
     }
 
-    // Parse Slack event
-    const payload = JSON.parse(body);
+    // Parse Slack event based on content type
+    let payload;
+    if (contentType?.includes("application/x-www-form-urlencoded")) {
+      // URL-encoded format (most Slack events)
+      const params = new URLSearchParams(body);
+      const payloadString = params.get("payload");
+      payload = payloadString ? JSON.parse(payloadString) : Object.fromEntries(params);
+    } else {
+      // JSON format (URL verification)
+      payload = JSON.parse(body);
+    }
 
     // Handle URL verification
     if (payload.type === "url_verification") {
