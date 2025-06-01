@@ -65,15 +65,10 @@ var syncMemoryCmd = &cobra.Command{
 	},
 }
 
-var (
-	// Flags for sync command
-	dryRun bool
-)
-
 func init() {
 	rootCmd.AddCommand(memoryCmd)
 	memoryCmd.AddCommand(syncMemoryCmd)
 
-	// Add flags for memory commands
+	// Add flags for memory commands (dryRun is already declared in document.go)
 	syncMemoryCmd.Flags().BoolVarP(&dryRun, "dry-run", "n", false, "Perform a trial run with no changes made")
 }

@@ -382,3 +382,61 @@ func (s *GitHubStorage) downloadRepository() error {
 	s.tmpDirPath = filepath.Join(extractDir)
 	return nil
 }
+
+// GetMemoryEntries implements the Storage interface for memories
+func (s *GitHubStorage) GetMemoryEntries() ([]model.MemoryEntry, error) {
+	if s.tmpDirPath == "" {
+		log.Printf("No local clone found, downloading repository...")
+		if err := s.downloadRepository(); err != nil {
+			return nil, fmt.Errorf("error downloading repository: %w", err)
+		}
+	} else {
+		log.Printf("Using existing local clone at %s", s.tmpDirPath)
+	}
+
+	// Look for memories in the .memories directory
+	memoriesDir := filepath.Join(s.tmpDirPath, ".memories")
+	
+	// Check if .memories directory exists
+	if _, err := os.Stat(memoriesDir); os.IsNotExist(err) {
+		log.Printf(".memories directory does not exist, returning empty list")
+		return []model.MemoryEntry{}, nil
+	}
+
+	// Get all markdown files from the .memories directory
+	var memoryEntries []model.MemoryEntry
+	
+	err := filepath.Walk(memoriesDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		
+		// Skip directories and non-markdown files
+		if info.IsDir() || !strings.HasSuffix(path, ".md") {
+			return nil
+		}
+		
+		// Get relative path from .memories directory
+		relPath, err := filepath.Rel(memoriesDir, path)
+		if err != nil {
+			return fmt.Errorf("error getting relative path: %w", err)
+		}
+		
+		// Remove .md extension for the memory path
+		memoryPath := strings.TrimSuffix(relPath, ".md")
+		
+		memoryEntries = append(memoryEntries, model.MemoryEntry{
+			Path:       memoryPath,
+			ModifiedAt: info.ModTime(),
+		})
+		
+		return nil
+	})
+	
+	if err != nil {
+		return nil, fmt.Errorf("error walking memories directory: %w", err)
+	}
+	
+	log.Printf("Found %d memory entries", len(memoryEntries))
+	return memoryEntries, nil
+}

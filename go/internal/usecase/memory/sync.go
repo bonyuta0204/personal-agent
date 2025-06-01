@@ -25,14 +25,7 @@ func NewSyncUsecase(memoryRepo repository.MemoryRepository, memoryStorageFactory
 	}
 }
 
-func (u *SyncUsecase) Sync(storeId string) error {
-	// Convert string storeId to model.StoreId (uint)
-	var id model.StoreId
-	_, err := fmt.Sscanf(storeId, "%d", &id)
-	if err != nil {
-		return fmt.Errorf("invalid store ID format: %v", err)
-	}
-
+func (u *SyncUsecase) Sync() error {
 	// Get the storage
 	storage, err := u.memoryStorageFactory.CreateMemoryStorage()
 	if err != nil {

@@ -27,7 +27,10 @@ func (p *StorageFactoryProvider) GetFactory(storeType string) (port.StorageFacto
 	}
 }
 
-// MemoryStorageFactory implements the StorageFactory interface for memory
+// Ensure MemoryStorageFactory implements port.MemoryStorageFactory
+var _ port.MemoryStorageFactory = (*MemoryStorageFactory)(nil)
+
+// MemoryStorageFactory implements the MemoryStorageFactory interface for memory
 type MemoryStorageFactory struct {
 	repo string
 }
@@ -39,7 +42,7 @@ func NewMemoryStorageFactory(repo string) *MemoryStorageFactory {
 	}
 }
 
-// CreateStorage creates a new memory storage instance
-func (f *MemoryStorageFactory) CreateStorage(store model.DocumentStore) (port.Storage, error) {
+// CreateMemoryStorage creates a new memory storage instance
+func (f *MemoryStorageFactory) CreateMemoryStorage() (port.Storage, error) {
 	return NewGitHubStorage(f.repo)
 }
