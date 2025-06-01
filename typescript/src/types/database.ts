@@ -1,6 +1,8 @@
 export type DocumentId = string;
 export type MemoryId = string;
 export type StoreId = number;
+export type ConversationId = string;
+export type MessageId = string;
 
 export interface Store {
   id: StoreId;
@@ -49,4 +51,22 @@ export interface SearchOptions {
   limit?: number;
   threshold?: number;
   tags?: string[] | undefined;
+}
+
+export interface Conversation {
+  id: ConversationId;
+  thread_id: string;
+  channel_id: string;
+  user_id: string;
+  created_at: Date;
+  updated_at: Date;
+}
+
+export interface Message {
+  id: MessageId;
+  conversation_id: ConversationId;
+  role: 'human' | 'assistant' | 'system';
+  content: string;
+  metadata?: Record<string, any>;
+  created_at: Date;
 }
