@@ -30,10 +30,10 @@ export function createNewMemoryTool(pool: Pool, config?: Config) {
         
         const res = await client.query(
           embedding 
-            ? `INSERT INTO memories (content, path, tags, embedding) VALUES ($1, $2, $3, $4) RETURNING *`
+            ? `INSERT INTO memories (content, path, tags, embedding) VALUES ($1, $2, $3, $4::vector) RETURNING *`
             : `INSERT INTO memories (content, path, tags) VALUES ($1, $2, $3) RETURNING *`,
           embedding 
-            ? [input.content, input.path, JSON.stringify(input.tags), embedding]
+            ? [input.content, input.path, JSON.stringify(input.tags), `[${embedding.join(',')}]`]
             : [input.content, input.path, JSON.stringify(input.tags)]
         );
         
@@ -136,7 +136,7 @@ export function createMemorySemanticSearchTool(pool: Pool, config: Config) {
            WHERE embedding IS NOT NULL
            ORDER BY combined_score DESC 
            LIMIT $2`,
-          [queryEmbedding, input.k || 5, recencyWeight]
+          [`[${queryEmbedding.join(',')}]`, input.k || 5, recencyWeight]
         );
         
         return JSON.stringify({
@@ -244,10 +244,17 @@ export function createMemoryAnalyticsTool(pool: Pool) {
         switch (input.groupBy) {
           case 'path':
             query = `
-              SELECT path, COUNT(*) as count, 
-                     array_agg(DISTINCT jsonb_array_elements_text(tags)) as all_tags
-              FROM memories 
-              GROUP BY path 
+              WITH tag_expansion AS (
+                SELECT path, jsonb_array_elements_text(tags) as tag
+                FROM memories
+              )
+              SELECT 
+                m.path, 
+                COUNT(DISTINCT m.id) as count,
+                array_agg(DISTINCT te.tag) as all_tags
+              FROM memories m
+              LEFT JOIN tag_expansion te ON m.path = te.path
+              GROUP BY m.path
               ORDER BY count DESC`;
             break;
           case 'tag':
