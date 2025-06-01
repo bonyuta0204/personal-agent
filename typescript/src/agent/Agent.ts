@@ -1,5 +1,5 @@
 import { ChatOpenAI } from "@langchain/openai";
-import { MemorySaver } from "@langchain/langgraph";
+import { MemorySaver, BaseCheckpointSaver } from "@langchain/langgraph";
 import { createReactAgent } from "@langchain/langgraph/prebuilt";
 import { SystemMessage } from "@langchain/core/messages";
 
@@ -91,7 +91,7 @@ const systemMessage = new SystemMessage(
 
 export type PersonalAgent = Awaited<ReturnType<typeof createPersonalAgent>>;
 
-export async function createPersonalAgent(config: Config, pool: Pool) {
+export async function createPersonalAgent(config: Config, pool: Pool, memorySaver?: BaseCheckpointSaver) {
   // Define the tools for the agent to use
   const documentSemanticTool = await createDocumentSemanticTool(pool,config);
   const documentTagSearchTool = await createDocumentTagSearchTool(pool);
@@ -120,10 +120,12 @@ export async function createPersonalAgent(config: Config, pool: Pool) {
   const agentModel = new ChatOpenAI({
     temperature: 0,
     model: config.openai.model,
+    apiKey: config.openai.openaiApiKey,
   });
 
   // Initialize memory to persist state between graph runs
-  const agentCheckpointer = new MemorySaver();
+  // Use provided memorySaver or fallback to in-memory
+  const agentCheckpointer = memorySaver || new MemorySaver();
   const agent = createReactAgent({
     llm: agentModel,
     tools: agentTools,

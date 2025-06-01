@@ -4,6 +4,7 @@ import { Pool } from "pg";
 
 import { createPersonalAgent } from "../../../typescript/src/agent/Agent.ts";
 import { Config } from "../../../typescript/src/config/index.ts";
+import { DatabaseMemorySaver } from "../../../typescript/src/agent/DatabaseMemorySaver.ts";
 
 // Import EdgeRuntime for background tasks
 declare const EdgeRuntime: {
@@ -43,11 +44,11 @@ function formatSlackResponse(agentResponse: string, sources?: any[]): any {
   // Add sources if available
   if (sources && sources.length > 0) {
     blocks.push({
-      type: "context",
+      type: "context" as const,
       elements: sources.slice(0, 3).map((source) => ({
-        type: "mrkdwn",
+        type: "mrkdwn" as const,
         text: `📄 ${source.path || source.type}`,
-      })),
+      })) as any,
     });
   }
 
@@ -66,21 +67,36 @@ async function processSlackMessage(event: any, text: string) {
       connectionString: Deno.env.get("SUPABASE_DB_URL")!,
     });
 
-    // Create config
+    // Create config - database config is not needed for Slack webhook
+    // as we pass the pool directly
     const config: Config = {
+      database: {
+        host: "",
+        port: 0,
+        database: "",
+        username: "",
+        password: "",
+        ssl: false,
+      },
       openai: {
-        apiKey: Deno.env.get("OPENAI_API_KEY")!,
+        openaiApiKey: Deno.env.get("OPENAI_API_KEY")!,
         model: Deno.env.get("OPENAI_MODEL") || "gpt-4o-mini",
         embeddingModel: Deno.env.get("OPENAI_EMBEDDING_MODEL") ||
           "text-embedding-3-small",
       },
     };
 
-    // Create agent instance
-    const agent = await createPersonalAgent(config, pool);
+    // Create memory saver with database persistence
+    const memorySaver = new DatabaseMemorySaver(await pool.connect());
+    
+    // Create agent instance with database memory saver
+    const agent = await createPersonalAgent(config, pool, memorySaver);
 
-    // Invoke agent
-    const sessionId = `slack-${event.channel}-${event.user}`;
+    // Create thread-specific session ID
+    // If this is a thread message, include thread_ts in the session ID
+    const sessionId = event.thread_ts 
+      ? `slack-${event.channel}-${event.user}-${event.thread_ts}`
+      : `slack-${event.channel}-${event.user}-${event.ts}`;
     const result = await agent.invoke(
       {
         messages: [{ role: "user", content: text }],
@@ -91,7 +107,10 @@ async function processSlackMessage(event: any, text: string) {
     );
 
     // Extract response
-    const agentResponse = result.messages[result.messages.length - 1].content;
+    const lastMessage = result.messages[result.messages.length - 1];
+    const agentResponse = typeof lastMessage.content === 'string' 
+      ? lastMessage.content 
+      : JSON.stringify(lastMessage.content);
 
     // Post response to Slack
     const slackToken = Deno.env.get("SLACK_BOT_TOKEN");
