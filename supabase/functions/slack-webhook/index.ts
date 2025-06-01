@@ -1,10 +1,14 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createHmac } from "https://deno.land/std@0.168.0/node/crypto.ts";
-import { Pool } from "https://deno.land/x/postgres@v0.17.0/mod.ts";
+import { Pool } from "pg";
 
-// Import simplified agent to avoid LangGraph issues
-import { createPersonalAgent } from "./Agent.ts";
+import { createPersonalAgent } from "../../../typescript/src/agent/Agent.ts";
 import { Config } from "../../../typescript/src/config/index.ts";
+
+// Import EdgeRuntime for background tasks
+declare const EdgeRuntime: {
+  waitUntil(promise: Promise<any>): void;
+};
 
 // Slack signature verification
 function verifySlackSignature(
@@ -48,6 +52,100 @@ function formatSlackResponse(agentResponse: string, sources?: any[]): any {
   }
 
   return { blocks };
+}
+
+// Process Slack message in background
+async function processSlackMessage(event: any, text: string) {
+  let pool: Pool | null = null;
+  
+  try {
+    console.log(`Processing message from ${event.user} in channel ${event.channel}: ${text}`);
+    
+    // Create database connection
+    pool = new Pool({
+      connectionString: Deno.env.get("SUPABASE_DB_URL")!,
+    });
+
+    // Create config
+    const config: Config = {
+      openai: {
+        apiKey: Deno.env.get("OPENAI_API_KEY")!,
+        model: Deno.env.get("OPENAI_MODEL") || "gpt-4o-mini",
+        embeddingModel: Deno.env.get("OPENAI_EMBEDDING_MODEL") ||
+          "text-embedding-3-small",
+      },
+    };
+
+    // Create agent instance
+    const agent = await createPersonalAgent(config, pool);
+
+    // Invoke agent
+    const sessionId = `slack-${event.channel}-${event.user}`;
+    const result = await agent.invoke(
+      {
+        messages: [{ role: "user", content: text }],
+      },
+      {
+        configurable: { thread_id: sessionId },
+      },
+    );
+
+    // Extract response
+    const agentResponse = result.messages[result.messages.length - 1].content;
+
+    // Post response to Slack
+    const slackToken = Deno.env.get("SLACK_BOT_TOKEN");
+    const slackResponse = await fetch(
+      "https://slack.com/api/chat.postMessage",
+      {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${slackToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          channel: event.channel,
+          thread_ts: event.thread_ts || event.ts,
+          ...formatSlackResponse(agentResponse),
+        }),
+      },
+    );
+
+    if (!slackResponse.ok) {
+      console.error("Failed to post to Slack:", await slackResponse.text());
+    } else {
+      console.log("Successfully posted response to Slack");
+    }
+  } catch (error) {
+    console.error("Error processing Slack message:", error);
+    
+    // Try to send error message to Slack
+    try {
+      const slackToken = Deno.env.get("SLACK_BOT_TOKEN");
+      await fetch(
+        "https://slack.com/api/chat.postMessage",
+        {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${slackToken}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            channel: event.channel,
+            thread_ts: event.thread_ts || event.ts,
+            text: "Sorry, I encountered an error while processing your message. Please try again later.",
+          }),
+        },
+      );
+    } catch (postError) {
+      console.error("Failed to post error message to Slack:", postError);
+    }
+  } finally {
+    // Clean up database connection
+    if (pool) {
+      await pool.end();
+    }
+  }
 }
 
 Deno.serve(async (req) => {
@@ -124,68 +222,10 @@ Deno.serve(async (req) => {
       // Extract message text (remove bot mention)
       const text = event.text.replace(/<@[A-Z0-9]+>/g, "").trim();
 
-      // Create database connection (to existing PostgreSQL)
-      const pool = new Pool({
-        user: Deno.env.get("DB_USER"),
-        password: Deno.env.get("DB_PASSWORD"),
-        database: Deno.env.get("DB_NAME"),
-        hostname: Deno.env.get("DB_HOST"),
-        port: parseInt(Deno.env.get("DB_PORT") || "5432"),
-        tls: { enabled: false }, // Adjust based on your setup
-      }, 3);
+      // Process the message in the background
+      EdgeRuntime.waitUntil(processSlackMessage(event, text));
 
-      // Create config (reuse existing config structure)
-      const config: Config = {
-        openai: {
-          apiKey: Deno.env.get("OPENAI_API_KEY")!,
-          model: Deno.env.get("OPENAI_MODEL") || "gpt-4o-mini",
-          embeddingModel: Deno.env.get("OPENAI_EMBEDDING_MODEL") ||
-            "text-embedding-3-small",
-        },
-      };
-
-      // Create agent instance
-      const agent = await createPersonalAgent(config, pool);
-
-      // Invoke agent
-      const sessionId = `slack-${event.channel}-${event.user}`;
-      const result = await agent.invoke(
-        {
-          messages: [{ role: "user", content: text }],
-        },
-        {
-          configurable: { thread_id: sessionId },
-        },
-      );
-
-      // Extract response
-      const agentResponse = result.messages[result.messages.length - 1].content;
-
-      // Post response to Slack
-      const slackToken = Deno.env.get("SLACK_BOT_TOKEN");
-      const slackResponse = await fetch(
-        "https://slack.com/api/chat.postMessage",
-        {
-          method: "POST",
-          headers: {
-            "Authorization": `Bearer ${slackToken}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            channel: event.channel,
-            thread_ts: event.thread_ts || event.ts,
-            ...formatSlackResponse(agentResponse),
-          }),
-        },
-      );
-
-      if (!slackResponse.ok) {
-        console.error("Failed to post to Slack:", await slackResponse.text());
-      }
-
-      // Clean up
-      await pool.end();
-
+      // Return immediately to acknowledge the webhook
       return new Response("OK");
     }
 
