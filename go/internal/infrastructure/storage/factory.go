@@ -26,3 +26,20 @@ func (p *StorageFactoryProvider) GetFactory(storeType string) (port.StorageFacto
 		return nil, model.ErrUnsupportedStoreType
 	}
 }
+
+// MemoryStorageFactory implements the StorageFactory interface for memory
+type MemoryStorageFactory struct {
+	repo string
+}
+
+// NewMemoryStorageFactory creates a new memory storage factory
+func NewMemoryStorageFactory(repo string) *MemoryStorageFactory {
+	return &MemoryStorageFactory{
+		repo: repo,
+	}
+}
+
+// CreateStorage creates a new memory storage instance
+func (f *MemoryStorageFactory) CreateStorage(store model.DocumentStore) (port.Storage, error) {
+	return NewGitHubStorage(f.repo)
+}
