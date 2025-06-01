@@ -80,9 +80,9 @@ The system flow starts with collecting data from various sources, storing it in 
 | **Data Collection**      | **Go**                                          | Clean architecture with domain-driven design    |
 | **Memory Sync**          | **Go**                                          | Document synchronization and storage            |
 | **Storage**              | **PostgreSQL + pgvector**                       | Vector embeddings for semantic search           |
-| **AI Agent**             | **Deno**                                        | RAG (Retrieval Augmented Generation)            |
+| **AI Agent**             | **Deno**                                        | LangChain, OpenAI API, RAG                      |
 | **Hosting**              | **Supabase Edge Functions**                     | Serverless deployment for AI agent              |
-| **User Interface**       | **Slack App**                                   | Chat interface for interacting with agent       |
+| **User Interface**       | **Slack App / CLI**                             | Chat interfaces for interacting with agent      |
 | **Local Development**    | **Docker Compose**                              | Containerized local development environment     |
 
 ---
@@ -91,7 +91,7 @@ The system flow starts with collecting data from various sources, storing it in 
 
 ```
 personal-agent/
-├─ go/                       # Go sources
+├─ go/                       # Go sources (Data collection & sync)
 │  ├─ internal/              # Private application code
 │  │   ├─ domain/            # Enterprise business rules
 │  │   │   ├─ model/         # Core domain entities and value objects
@@ -111,6 +111,16 @@ personal-agent/
 │  ├─ migrations/            # Database migrations
 │  └─ bin/                   # Compiled binaries
 │
+├─ typescript/               # TypeScript sources (AI Agent)
+│  ├─ src/
+│  │   ├─ agent/             # LangChain agent implementation
+│  │   ├─ cli/               # Interactive CLI chat interface
+│  │   ├─ config/            # Environment configuration
+│  │   ├─ tools/             # Agent tools (document search)
+│  │   └─ types/             # TypeScript type definitions
+│  ├─ deno.json              # Deno configuration
+│  └─ README.md              # TypeScript module documentation
+│
 ├─ docker-compose.yml        # Docker Compose configuration
 └─ README.md (← **YOU ARE HERE**)
 ```
@@ -119,23 +129,174 @@ personal-agent/
 
 ## 4. Quick Start (Local)
 
+### 4.1 Setup Data Collection (Go)
+
 ```bash
 # 1. Clone the repository
 git clone https://github.com/bonyuta0204/personal-agent.git
 cd personal-agent
 
-# 2. Setup environment variables
-cp go/.env.sample go/.env
+# 2. Start PostgreSQL with pgvector
+docker-compose up -d
 
-# 3. Build the CLI tool
+# 3. Setup environment variables
+cp go/.env.sample go/.env
+# Edit go/.env with your credentials
+
+# 4. Build the CLI tool
 cd go
 make build
 
-# 4. Run the CLI tool
-./bin/personal-agent --help
+# 5. Create a document store (e.g., GitHub repository)
+./bin/personal-agent store create owner/repo
+
+# 6. Sync documents from the store
+./bin/personal-agent document sync <store-id>
 ```
 
-> **⚠️ Environment variables** are documented in `go/.env.sample`.
+### 4.2 Run AI Agent (TypeScript)
+
+```bash
+# 1. Navigate to TypeScript directory
+cd typescript
+
+# 2. Setup environment variables
+cp .env.sample .env
+# Edit .env with your OpenAI API key and database credentials
+
+# 3. Start the AI chat interface
+deno task start
+```
+
+You'll see:
+```
+🤖 Personal Agent
+Type your questions naturally. Type 'exit' to quit.
+```
+
+Now you can chat with the agent using natural language!
+
+### 4.3 Environment Configuration
+
+**TypeScript AI Agent** requires these environment variables:
+
+```bash
+# Database Configuration
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=personal_agent
+DB_USER=postgres
+DB_PASSWORD=yourpassword
+DB_SSL=false
+
+# OpenAI Configuration
+OPENAI_API_KEY=sk-...  # Required
+OPENAI_MODEL=gpt-4o-mini  # Optional (default: gpt-4o-mini)
+OPENAI_EMBEDDING_MODEL=text-embedding-3-small  # Optional
+```
+
+> **⚠️ Full environment variables** are documented in `go/.env.sample` and `typescript/.env.sample`.
+
+---
+
+## 5. Using the AI Agent
+
+### 5.1 Overview
+
+The AI Agent uses RAG (Retrieval Augmented Generation) to answer questions based on your synchronized documents. It combines semantic search with LLM capabilities to provide contextual answers.
+
+### 5.2 Example Usage
+
+**Example 1: Searching for project documentation**
+```
+You: Show me the latest API documentation updates
+
+🤔 ...
+
+🤖 Agent:
+I found 3 recent API documentation updates:
+
+1. **REST API v2.0 Documentation** (Updated: 2025-01-15)
+   - Added new endpoints for user authentication
+   - Updated rate limiting policies
+   - Included webhook configuration examples
+
+2. **GraphQL Schema Changes** (Updated: 2025-01-10)
+   - New fields added to User and Project types
+   - Deprecated legacy mutation endpoints
+   - Performance optimization notes
+
+3. **SDK Integration Guide** (Updated: 2025-01-08)
+   - Python SDK now supports async operations
+   - JavaScript SDK updated to TypeScript
+   - New error handling patterns documented
+
+Would you like me to show you details about any specific update?
+
+You: exit
+👋 Goodbye!
+```
+
+**Example 2: Technical architecture questions**
+```
+You: What are the best practices for implementing microservices in our system?
+
+🤔 ...
+
+🤖 Agent:
+Based on our architecture documents, here are the key microservices best practices:
+
+1. **Service Boundaries**: Each service owns its data and exposes APIs
+2. **Communication**: Use async messaging (RabbitMQ) for non-critical flows
+3. **Monitoring**: Implement distributed tracing with OpenTelemetry
+4. **Deployment**: Container-based with Kubernetes orchestration
+
+Key implementation files:
+- Architecture guide: `docs/architecture/microservices.md`
+- Service templates: `templates/microservice-starter/`
+- Configuration: `infrastructure/k8s/services/`
+
+You: Tell me more about the messaging patterns
+
+🤖 Agent:
+Our messaging patterns follow these principles:
+
+1. **Event-Driven Architecture**:
+   - Services publish domain events to RabbitMQ exchanges
+   - Consumers subscribe to relevant event types
+   - Dead letter queues for failed message handling
+
+2. **Message Types**:
+   - Commands: Direct service-to-service requests
+   - Events: Broadcast state changes
+   - Queries: Read-only data requests via separate endpoints
+
+3. **Best Practices**:
+   - Idempotent message handlers
+   - Schema versioning for backward compatibility
+   - Correlation IDs for request tracing
+
+Implementation examples in `services/messaging/patterns/`
+
+You: exit
+👋 Goodbye!
+```
+
+### 5.3 Features
+
+- **Semantic Search**: Uses vector embeddings to find relevant information
+- **Contextual Understanding**: Maintains conversation context for follow-up questions
+- **Source Citation**: References specific documents and file paths
+- **Multi-format Support**: Handles various document types (Markdown, code, docs)
+- **Real-time Responses**: Fast retrieval using pgvector similarity search
+
+### 5.4 Tips for Better Results
+
+1. **Be Specific**: Ask targeted questions about particular topics or systems
+2. **Use Natural Language**: The agent understands conversational queries
+3. **Follow Up**: Ask clarifying questions to dive deeper into topics
+4. **Request Examples**: Ask for code examples or implementation details
+5. **Cross-reference**: Request comparisons between different approaches or systems
 
 ---
 
@@ -212,8 +373,20 @@ This separation of concerns allows for easy testing and maintenance.
 
 ## 11. Roadmap
 
-* [ ] Add support for additional data sources (Slack, Notion)
-* [ ] Implement memory functionality for the agent
-* [ ] Enable synchronization with external services
-* [ ] Add search functionality
-* [ ] Improve CLI user experience
+### Completed ✅
+* [x] GitHub data collection and synchronization
+* [x] Vector embeddings generation with OpenAI
+* [x] PostgreSQL with pgvector for semantic search
+* [x] AI chat interface with RAG (TypeScript/Deno)
+* [x] CLI tools for data management (Go)
+
+### In Progress 🚧
+* [ ] Slack integration for direct agent interaction
+* [ ] Memory functionality for the agent
+
+### Planned 📋
+* [ ] Add support for additional data sources (Slack API, Notion)
+* [ ] Enable memory synchronization with external services
+* [ ] Supabase Edge Functions deployment
+* [ ] Multi-modal support (images, documents)
+* [ ] Agent action capabilities beyond Q&A
